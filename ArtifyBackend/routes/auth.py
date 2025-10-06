@@ -1,21 +1,19 @@
 import uuid
-from fastapi import Depends, HTTPException
 import bcrypt
-from fastapi.params import Header
-import jwt
+from fastapi import Depends, HTTPException, Header
+from database import get_db
 from middleware.auth_middleware import auth_middleware
 from models.user import User
-from schemas.user_create import UserCreate
+from pydantic_schemas.user_create import UserCreate
 from fastapi import APIRouter
-from database import get_db
 from sqlalchemy.orm import Session
-
-from schemas.user_login import UserLogin
-
+from pydantic_schemas.user_login import UserLogin
+import jwt
+from sqlalchemy.orm import joinedload
 router = APIRouter()
 
 @router.post('/signup', status_code=201)
-def signup_user(user: UserCreate, db: Session = Depends(get_db)):
+def signup_user(user: UserCreate, db: Session=Depends(get_db)):
     # check if the user already exists in db
     user_db = db.query(User).filter(User.email == user.email).first()
 
@@ -32,9 +30,7 @@ def signup_user(user: UserCreate, db: Session = Depends(get_db)):
 
     return user_db
 
-
-    
-@router.post('/login', status_code=200)
+@router.post('/login')
 def login_user(user: UserLogin, db: Session = Depends(get_db)):
     # check if a user with same email already exist
     user_db = db.query(User).filter(User.email == user.email).first()
@@ -54,10 +50,11 @@ def login_user(user: UserLogin, db: Session = Depends(get_db)):
     return {'token': token, 'user': user_db}
 
 @router.get('/')
-def current_user_data(db: Session = Depends(get_db),
-                      user_dict = Depends(auth_middleware)): 
-
-    user = db.query(User).filter(User.id == user_dict['uid']).first()
+def current_user_data(db: Session=Depends(get_db), 
+                      user_dict = Depends(auth_middleware)):
+    user = db.query(User).filter(User.id == user_dict['uid']).options(
+        joinedload(User.favorites)
+    ).first()
 
     if not user:
         raise HTTPException(404, 'User not found!')

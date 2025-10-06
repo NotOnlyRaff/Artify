@@ -1,16 +1,12 @@
-# client
+Artify Project
 
-A new Flutter project.
+Per scaicare le dipendenze usare:
 
-## Getting Started
+Flutter pub get
 
-This project is a starting point for a Flutter application.
+Flutter usa pubspec.yaml come file di definizione dipendenze.
+Con "Pub Get" scaricherà tutte le librerie mancanti nella cartella .pub-cache e aggiornerà .packages e pubspec.lock.
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+flutter clean
+flutter pub get
+flutter run

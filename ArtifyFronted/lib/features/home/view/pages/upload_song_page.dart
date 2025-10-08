@@ -102,12 +102,11 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
                                 ),
                               )
                             : DottedBorder(
-                                options: RectDottedBorderOptions(
-                                  dashPattern: const [10, 4],
-                                  color: Pallete.borderColor,
-                                  strokeWidth: 2,
-                                  strokeCap: StrokeCap.round,
-                                ),
+                                color: Pallete.borderColor,
+                                radius: const Radius.circular(10),
+                                borderType: BorderType.RRect,
+                                dashPattern: const [10, 4],
+                                strokeCap: StrokeCap.round,
                                 child: const SizedBox(
                                   height: 150,
                                   width: double.infinity,

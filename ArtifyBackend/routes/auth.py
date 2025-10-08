@@ -55,8 +55,17 @@ def current_user_data(db: Session=Depends(get_db),
     user = db.query(User).filter(User.id == user_dict['uid']).options(
         joinedload(User.favorites)
     ).first()
-
+    
     if not user:
         raise HTTPException(404, 'User not found!')
     
     return user
+
+@router.get("/all", response_model=list[UserCreate])
+def get_all_users(db: Session = Depends(get_db)):
+    users = db.query(User).options(joinedload(User.favorites)).all()
+
+    if not users:
+        raise HTTPException(status_code=404, detail="No users found.")
+
+    return users

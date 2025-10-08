@@ -27,7 +27,6 @@ class _AudioWaveState extends State<AudioWave> {
     await playerController.preparePlayer(path: widget.path);
   }
 
-
   Future<void> playAndPause() async {
     if (!playerController.playerState.isPlaying) {
       await playerController.startPlayer();
@@ -36,7 +35,6 @@ class _AudioWaveState extends State<AudioWave> {
     }
     setState(() {});
   }
-
 
   @override
   void dispose() {

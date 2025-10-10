@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from database import get_db
 from middleware.auth_middleware import auth_middleware
@@ -27,6 +27,9 @@ def upload_song(song: UploadFile = File(...),
                 hex_code: str = Form(...),
                 db: Session = Depends(get_db),
                 auth_dict = Depends(auth_middleware)):
+    
+    if not song.content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="Invalid audio file type")
     song_id = str(uuid.uuid4())
     song_res = cloudinary.uploader.upload(song.file, resource_type='auto', folder=f'songs/{song_id}')
     thumbnail_res = cloudinary.uploader.upload(thumbnail.file, resource_type='image', folder=f'songs/{song_id}')

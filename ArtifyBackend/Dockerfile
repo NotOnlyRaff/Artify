@@ -14,4 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8080
 
 # Avvia l'app con FastAPI standard (che internamente usa Uvicorn)
-CMD ["fastapi", "run", "main.py", "--port", "8080"]
+CMD ["sh", "-c", "uvicorn main:app --port 8080 --host 0.0.0.0"]
+

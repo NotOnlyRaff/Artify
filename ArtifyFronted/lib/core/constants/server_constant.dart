@@ -2,5 +2,5 @@ import 'dart:io';
 
 class ServerConstant {
   static String serverURL =
-      Platform.isAndroid ? 'http://192.168.1.8:8000' : 'http://192.168.1.8:8000';
+      Platform.isAndroid ? 'https://artify-backend-1095834185305.europe-west2.run.app' : 'https://artify-backend-1095834185305.europe-west2.run.app';
 }

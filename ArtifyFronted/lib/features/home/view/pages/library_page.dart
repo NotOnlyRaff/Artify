@@ -15,7 +15,7 @@ class LibraryPage extends ConsumerWidget {
     return ref.watch(getFavSongsProvider).when(
           data: (data) {
             return ListView.builder(
-              itemCount: data.length + 1,
+              itemCount: data.length + 2,
               itemBuilder: (context, index) {
                 if (index == data.length) {
                   return ListTile(
@@ -38,6 +38,34 @@ class LibraryPage extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  );
+                }
+                 if (index == data.length + 1) {
+                  // 🔹 Delete Song
+                  return ListTile(
+                  onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const UploadSongPage(),
+                        ),
+                      );
+                    },
+                    leading: const CircleAvatar(
+                      radius: 35,
+                      backgroundColor: Pallete.backgroundColor,
+                      child: Icon(
+                        CupertinoIcons.delete,
+                        color: Colors.red,
+                      ),
+                    ),
+                    title: const Text(
+                      'Delete Song',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.red,
                       ),
                     ),
                   );

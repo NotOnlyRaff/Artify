@@ -10,17 +10,25 @@ HomeLocalRepository homeLocalRepository(HomeLocalRepositoryRef ref) {
 }
 
 class HomeLocalRepository {
-  final Box box = Hive.box();
+  static const String _boxName = 'recent_songs';
+
+  Box<dynamic> get _box => Hive.box(_boxName);
 
   void uploadLocalSong(SongModel song) {
-    box.put(song.id, song.toJson());
+    // salva il JSON della song, chiave = id del brano
+    _box.put(song.id, song.toJson());
   }
 
   List<SongModel> loadSongs() {
-    List<SongModel> songs = [];
-    for (final key in box.keys) {
-      songs.add(SongModel.fromJson(box.get(key)));
+    final songs = <SongModel>[];
+
+    for (final key in _box.keys) {
+      final raw = _box.get(key);
+      if (raw != null) {
+        songs.add(SongModel.fromJson(raw));
+      }
     }
+
     return songs;
   }
 }

@@ -2,11 +2,10 @@ import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/core/widgets/loader.dart';
 import 'package:client/features/auth/view/pages/login_page.dart';
-import 'package:client/features/auth/view/widgets/auth_gradient_button.dart';
-import 'package:client/core/widgets/custom_field.dart';
 import 'package:client/features/auth/viewmodel/auth_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class SignupPage extends ConsumerStatefulWidget {
   const SignupPage({super.key});
@@ -20,6 +19,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  bool _passwordVisible = false;
 
   @override
   void dispose() {
@@ -41,9 +41,9 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           data: (data) {
             showSnackBar(
               context,
-              'Account created successfully! Please  login.',
+              'Account created successfully! Please login.',
             );
-            Navigator.push(
+            Navigator.pushReplacement(
               context,
               MaterialPageRoute(
                 builder: (context) => const LoginPage(),
@@ -59,86 +59,432 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     );
 
     return Scaffold(
-      appBar: AppBar(),
+      backgroundColor: Colors.black,
       body: isLoading
-          ? const Loader()
-          : Padding(
-              padding: const EdgeInsets.all(15.0),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Sign Up.',
-                      style: TextStyle(
-                        fontSize: 50,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    CustomField(
-                      hintText: 'Name',
-                      controller: nameController,
-                    ),
-                    const SizedBox(height: 15),
-                    CustomField(
-                      hintText: 'Email',
-                      controller: emailController,
-                    ),
-                    const SizedBox(height: 15),
-                    CustomField(
-                      hintText: 'Password',
-                      controller: passwordController,
-                      isObscureText: true,
-                    ),
-                    const SizedBox(height: 20),
-                    AuthGradientButton(
-                      buttonText: 'Sign up',
-                      onTap: () async {
-                        if (formKey.currentState!.validate()) {
-                          await ref
-                              .read(authViewModelProvider.notifier)
-                              .signUpUser(
-                                name: nameController.text,
-                                email: emailController.text,
-                                password: passwordController.text,
-                              );
-                        } else {
-                          showSnackBar(context, 'Missing fields!');
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginPage(),
-                          ),
-                        );
-                      },
-                      child: RichText(
-                        text: TextSpan(
-                          text: 'Already have an account? ',
-                          style: Theme.of(context).textTheme.titleMedium,
-                          children: const [
-                            TextSpan(
-                              text: 'Sign In',
-                              style: TextStyle(
-                                color: Pallete.gradient2,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
+          ? const Center(child: Loader())
+          : Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF050509),
+                    Color(0xFF140813),
                   ],
                 ),
               ),
+              child: SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeader(context),
+                        const SizedBox(height: 32),
+                        _buildCreateArtistCard(context),
+                        const SizedBox(height: 32),
+                        _buildSignupCard(context),
+                        const SizedBox(height: 24),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LoginPage(),
+                              ),
+                            );
+                          },
+                          child: RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
+                              text: 'Already have an account? ',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: Colors.white70,
+                                  ),
+                              children: const [
+                                TextSpan(
+                                  text: 'Sign In',
+                                  style: TextStyle(
+                                    color: Pallete.gradient2,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF811F1A),
+                    Color(0xFFB8322C),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.music_note_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Artify',
+                  style: GoogleFonts.roboto(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Text(
+                  'step on your own stage',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Create your Artify account\nand start shaping your sound.',
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            height: 1.3,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCreateArtistCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withOpacity(0.03),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF811F1A),
+                  Color(0xFF4B39EF),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Icon(
+              Icons.person_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Build your artist profile',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Upload tracks, design covers, own your space.',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white70,
+                    fontSize: 11,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignupCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.03),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+        ),
+      ),
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // NAME
+            Text(
+              'Name',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: nameController,
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+              decoration: _inputDecoration(
+                context: context,
+                hintText: 'Your artist name',
+                prefixIcon: Icons.person_outline_rounded,
+              ),
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Enter your name' : null,
+            ),
+            const SizedBox(height: 18),
+
+            // EMAIL
+            Text(
+              'Email',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+              decoration: _inputDecoration(
+                context: context,
+                hintText: 'you@artify.com',
+                prefixIcon: Icons.alternate_email_rounded,
+              ),
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Enter your email' : null,
+            ),
+            const SizedBox(height: 18),
+
+            // PASSWORD
+            Text(
+              'Password',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: passwordController,
+              obscureText: !_passwordVisible,
+              autofillHints: const [AutofillHints.password],
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+              decoration: _inputDecoration(
+                context: context,
+                hintText: '••••••••',
+                prefixIcon: Icons.lock_outline_rounded,
+                suffix: IconButton(
+                  icon: Icon(
+                    _passwordVisible
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_rounded,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _passwordVisible = !_passwordVisible;
+                    });
+                  },
+                ),
+              ),
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Enter your password' : null,
+            ),
+            const SizedBox(height: 20),
+
+            // BUTTON
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    await ref.read(authViewModelProvider.notifier).signUpUser(
+                          name: nameController.text.trim(),
+                          email: emailController.text.trim(),
+                          password: passwordController.text,
+                        );
+                  } else {
+                    showSnackBar(context, 'Missing fields!');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ).copyWith(
+                  backgroundColor: MaterialStateProperty.resolveWith(
+                    (states) => null,
+                  ),
+                  elevation: MaterialStateProperty.all(6),
+                ),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF811F1A),
+                        Color(0xFF4B39EF),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Create account',
+                      style: GoogleFonts.roboto(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required BuildContext context,
+    required String hintText,
+    IconData? prefixIcon,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.03),
+      hintText: hintText,
+      hintStyle: GoogleFonts.plusJakartaSans(
+        color: Colors.white38,
+        fontSize: 13,
+      ),
+      prefixIcon: prefixIcon != null
+          ? Icon(
+              prefixIcon,
+              color: Colors.white60,
+              size: 20,
+            )
+          : null,
+      suffixIcon: suffix,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Colors.white.withOpacity(0.12),
+          width: 1,
+        ),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(
+          color: Pallete.gradient2,
+          width: 1.4,
+        ),
+      ),
+      errorBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(
+          color: Colors.redAccent,
+          width: 1,
+        ),
+      ),
+      focusedErrorBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(
+          color: Colors.redAccent,
+          width: 1.2,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 13,
+      ),
     );
   }
 }

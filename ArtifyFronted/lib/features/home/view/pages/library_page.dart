@@ -1,6 +1,7 @@
 import 'package:client/core/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/widgets/loader.dart';
+import 'package:client/features/home/view/pages/delete_song_page.dart';
 import 'package:client/features/home/view/pages/upload_song_page.dart';
 import 'package:client/features/home/viewmodel/home_viewmodel.dart';
 import 'package:flutter/cupertino.dart';
@@ -42,13 +43,13 @@ class LibraryPage extends ConsumerWidget {
                     ),
                   );
                 }
-                 if (index == data.length + 1) {
+                if (index == data.length + 1) {
                   // 🔹 Delete Song
                   return ListTile(
-                  onTap: () {
+                    onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) => const UploadSongPage(),
+                          builder: (context) => const DeleteSongPage(),
                         ),
                       );
                     },

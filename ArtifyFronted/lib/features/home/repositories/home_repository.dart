@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/features/home/models/song_model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -15,48 +15,113 @@ HomeRepository homeRepository(HomeRepositoryRef ref) {
 }
 
 class HomeRepository {
-  Future<Either<AppFailure, String>> uploadSong({
-    required File selectedAudio,
-    required File selectedThumbnail,
+  Future<Either<AppFailure, SongModel>> uploadSong({
+    required PickedMedia selectedAudio,
+    required PickedMedia selectedThumbnail,
     required String songName,
     required String artist,
     required String hexCode,
     required String token,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ServerConstant.serverURL}/song/upload'),
-      );
+      final uri = Uri.parse('${ServerConstant.serverURL}/song/upload');
 
-      request
-        ..files.addAll(
-          [
-            await http.MultipartFile.fromPath('song', selectedAudio.path),
-            await http.MultipartFile.fromPath(
-                'thumbnail', selectedThumbnail.path),
-          ],
-        )
-        ..fields.addAll(
-          {
-            'artist': artist,
-            'song_name': songName,
-            'hex_code': hexCode,
-          },
-        )
-        ..headers.addAll(
-          {
-            'x-auth-token': token,
-          },
+      final request = http.MultipartRequest('POST', uri);
+
+      request.headers['x-auth-token'] = token;
+
+      request.fields['song_name'] = songName;
+      request.fields['artist'] = artist;
+      request.fields['hex_code'] = hexCode;
+
+      // AUDIO
+      if (kIsWeb) {
+        if (selectedAudio.bytes == null) {
+          return Left(AppFailure('Audio bytes are null on Web'));
+        }
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'audio', // <-- nome field lato FastAPI
+            selectedAudio.bytes!,
+            filename: selectedAudio.name,
+          ),
         );
-
-      final res = await request.send();
-
-      if (res.statusCode != 201) {
-        return Left(AppFailure(await res.stream.bytesToString()));
+      } else {
+        if (selectedAudio.filePath == null) {
+          return Left(AppFailure('Audio path is null on mobile'));
+        }
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'audio',
+            selectedAudio.filePath!,
+          ),
+        );
       }
 
-      return Right(await res.stream.bytesToString());
+      // THUMBNAIL
+      if (kIsWeb) {
+        if (selectedThumbnail.bytes == null) {
+          return Left(AppFailure('Image bytes are null on Web'));
+        }
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'thumbnail', // <-- nome field lato FastAPI
+            selectedThumbnail.bytes!,
+            filename: selectedThumbnail.name,
+          ),
+        );
+      } else {
+        if (selectedThumbnail.filePath == null) {
+          return Left(AppFailure('Image path is null on mobile'));
+        }
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'thumbnail',
+            selectedThumbnail.filePath!,
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 201 && response.statusCode != 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return Left(AppFailure(body['detail']?.toString() ?? 'Upload failed'));
+      }
+
+      final map = jsonDecode(response.body) as Map<String, dynamic>;
+      final song = SongModel.fromMap(map); // adatta se la risposta è diversa
+
+      return Right(song);
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
+  }
+
+  Future<Either<AppFailure, bool>> deleteSong({
+    required String songId,
+    required String token,
+  }) async {
+    try {
+      final uri = Uri.parse('${ServerConstant.serverURL}/song/$songId');
+      // Se il tuo BE ha un path diverso (es. /song/delete/{id}),
+      // cambia questa riga di conseguenza.
+
+      final response = await http.delete(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token,
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return Left(AppFailure(body['detail']?.toString() ?? 'Delete failed'));
+      }
+
+      return const Right(true);
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }

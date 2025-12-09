@@ -1,4 +1,4 @@
-python -m venv venvython -m venv venv
+python -m venv 
 .\venv\Scripts\activate 
 
 pip install --upgrade pip

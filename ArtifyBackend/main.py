@@ -1,11 +1,27 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from models.base import Base
 from routes import auth, song
 from database import engine
 
 app = FastAPI()
 
-app.include_router(auth.router, prefix='/auth')
-app.include_router(song.router, prefix='/song')
+# ⬇⬇ CORS (sviluppo: puoi anche usare "*" se vuoi semplificare)
+origins = [
+    "http://localhost:52720",  # porta di Flutter Web (controlla quella reale)
+    "http://127.0.0.1:52720",
+    "http://localhost:8000",   # opzionale, ma non fa male
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],      # in dev puoi mettere ["*"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router, prefix="/auth")
+app.include_router(song.router, prefix="/song")
 
 Base.metadata.create_all(engine)

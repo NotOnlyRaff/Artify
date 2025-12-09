@@ -4,10 +4,9 @@ from fastapi import Depends, HTTPException, Header
 from database import get_db
 from middleware.auth_middleware import auth_middleware
 from models.user import User
-from pydantic_schemas.user_create import UserCreate
+from schemas.user import UserCreate, UserLogin
 from fastapi import APIRouter
 from sqlalchemy.orm import Session
-from pydantic_schemas.user_login import UserLogin
 import jwt
 from sqlalchemy.orm import joinedload
 router = APIRouter()

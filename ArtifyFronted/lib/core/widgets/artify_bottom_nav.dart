@@ -91,6 +91,19 @@ class ArtifyBottomNav extends StatelessWidget {
                 ),
                 label: 'Library',
               ),
+              BottomNavigationBarItem(
+                icon: Icon(
+                  Icons.admin_panel_settings_outlined,
+                  size: 24,
+                  color: Pallete.inactiveBottomBarItemColor,
+                ),
+                activeIcon: Icon(
+                  Icons.admin_panel_settings,
+                  size: 24,
+                  color: Pallete.whiteColor,
+                ),
+                label: 'Admin',
+              ),
             ],
           ),
         ),

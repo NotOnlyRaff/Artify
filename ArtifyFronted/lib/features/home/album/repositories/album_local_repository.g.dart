@@ -1,25 +1,27 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'home_repository.dart';
+part of 'album_local_repository.dart';
 
 // **************************************************************************
 // RiverpodGenerator
 // **************************************************************************
 
-String _$homeRepositoryHash() => r'0a08542f3cf9d0425f87a20b06020cdd03fa827f';
+String _$albumLocalRepositoryHash() =>
+    r'c12873a06279a15ecc02cd99940468df4362e177';
 
-/// See also [homeRepository].
-@ProviderFor(homeRepository)
-final homeRepositoryProvider = AutoDisposeProvider<HomeRepository>.internal(
-  homeRepository,
-  name: r'homeRepositoryProvider',
+/// See also [albumLocalRepository].
+@ProviderFor(albumLocalRepository)
+final albumLocalRepositoryProvider =
+    AutoDisposeProvider<AlbumLocalRepository>.internal(
+  albumLocalRepository,
+  name: r'albumLocalRepositoryProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
       ? null
-      : _$homeRepositoryHash,
+      : _$albumLocalRepositoryHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
-typedef HomeRepositoryRef = AutoDisposeProviderRef<HomeRepository>;
+typedef AlbumLocalRepositoryRef = AutoDisposeProviderRef<AlbumLocalRepository>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

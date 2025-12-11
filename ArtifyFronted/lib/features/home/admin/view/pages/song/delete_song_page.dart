@@ -1,7 +1,7 @@
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/utils.dart';
-import 'package:client/features/home/models/song_model.dart';
-import 'package:client/features/home/viewmodel/home_viewmodel.dart';
+import 'package:client/features/home/song/model/song_model.dart';
+import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -56,7 +56,7 @@ class _DeleteSongPageState extends ConsumerState<DeleteSongPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                '“${song.song_name}” by ${song.artist}',
+                '“${song.songName}” by ${song.artists}',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.plusJakartaSans(
                   color: Colors.white70,
@@ -101,7 +101,7 @@ class _DeleteSongPageState extends ConsumerState<DeleteSongPage> {
 
     if (confirmed == true) {
       await ref
-          .read(homeViewModelProvider.notifier)
+          .read(songViewModelProvider.notifier)
           .deleteSong(songId: song.id);
 
       // invalidiamo la lista per ricaricare le tracce
@@ -112,7 +112,7 @@ class _DeleteSongPageState extends ConsumerState<DeleteSongPage> {
   @override
   Widget build(BuildContext context) {
     // 👇 QUI è il posto giusto per listen
-    ref.listen<AsyncValue?>(homeViewModelProvider, (prev, next) {
+    ref.listen<AsyncValue?>(songViewModelProvider, (prev, next) {
       if (next == null) return;
 
       next.when(
@@ -189,14 +189,15 @@ class _DeleteSongPageState extends ConsumerState<DeleteSongPage> {
                     leading: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.network(
-                        song.thumbnail_url,
+                        song.thumbnailUrl ??
+                            'https://via.placeholder.com/150?text=No+Image',
                         width: 56,
                         height: 56,
                         fit: BoxFit.cover,
                       ),
                     ),
                     title: Text(
-                      song.song_name,
+                      song.songName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.plusJakartaSans(
@@ -206,7 +207,9 @@ class _DeleteSongPageState extends ConsumerState<DeleteSongPage> {
                       ),
                     ),
                     subtitle: Text(
-                      song.artist,
+                      song.artists.isNotEmpty
+                          ? song.artists.map((a) => a.artist.name).join(', ')
+                          : 'Unknown Artist',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.plusJakartaSans(

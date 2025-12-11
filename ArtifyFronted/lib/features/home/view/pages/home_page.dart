@@ -1,8 +1,9 @@
+import 'package:client/features/home/view/pages/admin_page.dart';
 import 'package:client/features/home/view/pages/library_page.dart';
 import 'package:client/features/home/view/pages/search_page.dart';
 import 'package:client/features/home/view/pages/songs_page.dart';
 import 'package:client/features/home/view/widgets/music_slab.dart';
-import 'package:client/features/home/view/widgets/artify_bottom_nav.dart';
+import 'package:client/core/widgets/artify_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,6 +24,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     SongsPage(),
     SearchPage(),
     LibraryPage(),
+    AdminPage(),
   ];
 
   @override

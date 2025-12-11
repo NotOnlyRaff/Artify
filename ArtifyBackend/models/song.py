@@ -1,7 +1,8 @@
-from sqlalchemy import TEXT, VARCHAR, Column, Integer, Date
+from sqlalchemy import TEXT, Column, VARCHAR, Date, Integer
 from sqlalchemy.orm import relationship
-
 from models.base import Base
+from models.songArtist import SongArtist
+from models.albumSong import AlbumSong  # <--- IMPORTANTE
 
 
 class Song(Base):
@@ -41,33 +42,40 @@ class Song(Base):
 
     # ---------- RELAZIONI ----------
 
-       # LINK 1:N verso l’association object (SongArtist)
+    # Join table con artisti (lato forte)
     song_artist_links = relationship(
         "SongArtist",
         back_populates="song",
         cascade="all, delete-orphan",
     )
 
-    # M:N con Artist tramite SongArtist
+    # M:N di comodo: lista artisti (SOLO LETTURA)
     artists = relationship(
         "Artist",
-        secondary="song_artists",   # nome della tabella di join
+        secondary="song_artists",
+        viewonly=True,
         back_populates="songs",
+        overlaps="song_artist_links,artist,song,artists",
     )
 
-    # M:N con Album tramite AlbumSong
-    albums = relationship(
-        "Album",
-        secondary="album_songs",    # nome della tabella di join
-        back_populates="songs",
-    )
-
-    # 1:N con Favorite (User <-> Song M:N tramite Favorite)
-    favorites = relationship(
-        "Favorite",
+    # Join table con album
+    album_song_links = relationship(
+        "AlbumSong",
         back_populates="song",
         cascade="all, delete-orphan",
     )
 
-    def __repr__(self) -> str:
-        return f"<Song id={self.id!r} name={self.song_name!r} release_date={self.release_date!r}>"
+    # M:N di comodo: lista album (SOLO LETTURA)
+    albums = relationship(
+        "Album",
+        secondary="album_songs",
+        viewonly=True,
+        back_populates="songs",
+        overlaps="album_song_links,album,song,albums",
+    )
+
+    favorites = relationship(
+        "Favorite",              # usa il nome reale della classe
+        back_populates="song",   # deve combaciare con quel back_populates
+        cascade="all, delete-orphan",
+    )

@@ -1,10 +1,7 @@
 import 'package:client/core/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/widgets/loader.dart';
-import 'package:client/features/home/view/pages/delete_song_page.dart';
-import 'package:client/features/home/view/pages/upload_song_page.dart';
-import 'package:client/features/home/viewmodel/home_viewmodel.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,64 +12,25 @@ class LibraryPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ref.watch(getFavSongsProvider).when(
           data: (data) {
-            return ListView.builder(
-              itemCount: data.length + 2,
-              itemBuilder: (context, index) {
-                if (index == data.length) {
-                  return ListTile(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const UploadSongPage(),
-                        ),
-                      );
-                    },
-                    leading: const CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Pallete.backgroundColor,
-                      child: Icon(
-                        CupertinoIcons.plus,
-                      ),
-                    ),
-                    title: const Text(
-                      'Upload New Song',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  );
-                }
-                if (index == data.length + 1) {
-                  // 🔹 Delete Song
-                  return ListTile(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const DeleteSongPage(),
-                        ),
-                      );
-                    },
-                    leading: const CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Pallete.backgroundColor,
-                      child: Icon(
-                        CupertinoIcons.delete,
-                        color: Colors.red,
-                      ),
-                    ),
-                    title: const Text(
-                      'Delete Song',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.red,
-                      ),
-                    ),
-                  );
-                }
+            if (data.isEmpty) {
+              return Center(
+                child: Text(
+                  'No favorite songs yet.\nStart adding tracks to your library.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
+              );
+            }
 
+            return ListView.builder(
+              padding: const EdgeInsets.only(top: 8, bottom: 24),
+              itemCount: data.length,
+              itemBuilder: (context, index) {
                 final song = data[index];
+
                 return ListTile(
                   onTap: () {
                     ref
@@ -80,24 +38,34 @@ class LibraryPage extends ConsumerWidget {
                         .updateSong(song);
                   },
                   leading: CircleAvatar(
-                    backgroundImage: NetworkImage(
-                      song.thumbnail_url,
-                    ),
-                    radius: 35,
+                    radius: 28,
                     backgroundColor: Pallete.backgroundColor,
+                    backgroundImage: song.thumbnailUrl != null
+                        ? NetworkImage(song.thumbnailUrl!)
+                        : null,
+                    child: song.thumbnailUrl == null
+                        ? const Icon(
+                            Icons.music_note_rounded,
+                            color: Colors.white70,
+                          )
+                        : null,
                   ),
                   title: Text(
-                    song.song_name,
+                    song.songName,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
                   ),
                   subtitle: Text(
-                    song.artist,
+                    song.artists.isNotEmpty
+                        ? song.artists.map((a) => a.artist.name).join(', ')
+                        : 'Unknown Artist',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      color: Colors.white70,
                     ),
                   ),
                 );
@@ -106,7 +74,10 @@ class LibraryPage extends ConsumerWidget {
           },
           error: (error, st) {
             return Center(
-              child: Text(error.toString()),
+              child: Text(
+                error.toString(),
+                style: const TextStyle(color: Colors.redAccent),
+              ),
             );
           },
           loading: () => const Loader(),

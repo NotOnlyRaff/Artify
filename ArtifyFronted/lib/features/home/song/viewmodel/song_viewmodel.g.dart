@@ -1,14 +1,16 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'home_viewmodel.dart';
+part of 'song_viewmodel.dart';
 
 // **************************************************************************
 // RiverpodGenerator
 // **************************************************************************
 
-String _$getAllSongsHash() => r'a06f06bef1b9213d7a6fb1458e5a4d32f0c45f7e';
+String _$getAllSongsHash() => r'ebb70a5121ed26026cc0b97463e348e024256a06';
 
-/// See also [getAllSongs].
+/// ───────────────── PROVIDER LISTA SONG ─────────────────
+///
+/// Copied from [getAllSongs].
 @ProviderFor(getAllSongs)
 final getAllSongsProvider = AutoDisposeFutureProvider<List<SongModel>>.internal(
   getAllSongs,
@@ -20,7 +22,7 @@ final getAllSongsProvider = AutoDisposeFutureProvider<List<SongModel>>.internal(
 );
 
 typedef GetAllSongsRef = AutoDisposeFutureProviderRef<List<SongModel>>;
-String _$getFavSongsHash() => r'a87018e84ac4917a7a2b793d0931a0667503c6bb';
+String _$getFavSongsHash() => r'1a1a2e2639697f44ecb45b503938ca1d168e4c18';
 
 /// See also [getFavSongs].
 @ProviderFor(getFavSongs)
@@ -34,21 +36,28 @@ final getFavSongsProvider = AutoDisposeFutureProvider<List<SongModel>>.internal(
 );
 
 typedef GetFavSongsRef = AutoDisposeFutureProviderRef<List<SongModel>>;
-String _$homeViewModelHash() => r'6cf05ce57d5841404e742daaf6425c79a0258148';
+String _$songViewModelHash() => r'959b0a8c5065db03f7d7c2abc810bdc921069e24';
 
-/// See also [HomeViewModel].
-@ProviderFor(HomeViewModel)
-final homeViewModelProvider =
-    AutoDisposeNotifierProvider<HomeViewModel, AsyncValue?>.internal(
-  HomeViewModel.new,
-  name: r'homeViewModelProvider',
+/// ───────────────── VIEWMODEL CANZONI ─────────────────
+/// Gestisce:
+/// - upload song
+/// - delete song
+/// - toggle favorite
+/// - recently played (via SongLocalRepository)
+///
+/// Copied from [SongViewModel].
+@ProviderFor(SongViewModel)
+final songViewModelProvider =
+    AutoDisposeNotifierProvider<SongViewModel, AsyncValue?>.internal(
+  SongViewModel.new,
+  name: r'songViewModelProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
       ? null
-      : _$homeViewModelHash,
+      : _$songViewModelHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
-typedef _$HomeViewModel = AutoDisposeNotifier<AsyncValue?>;
+typedef _$SongViewModel = AutoDisposeNotifier<AsyncValue?>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

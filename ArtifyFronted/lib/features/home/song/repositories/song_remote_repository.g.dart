@@ -1,27 +1,27 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'home_local_repository.dart';
+part of 'song_remote_repository.dart';
 
 // **************************************************************************
 // RiverpodGenerator
 // **************************************************************************
 
-String _$homeLocalRepositoryHash() =>
-    r'30806b3c6a6c707b0b46e1f3406f89fd82b550dc';
+String _$songRemoteRepositoryHash() =>
+    r'f73bc419571e4cdce6908fc065b0f65b12c8059c';
 
-/// See also [homeLocalRepository].
-@ProviderFor(homeLocalRepository)
-final homeLocalRepositoryProvider =
-    AutoDisposeProvider<HomeLocalRepository>.internal(
-  homeLocalRepository,
-  name: r'homeLocalRepositoryProvider',
+/// See also [songRemoteRepository].
+@ProviderFor(songRemoteRepository)
+final songRemoteRepositoryProvider =
+    AutoDisposeProvider<SongRemoteRepository>.internal(
+  songRemoteRepository,
+  name: r'songRemoteRepositoryProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
       ? null
-      : _$homeLocalRepositoryHash,
+      : _$songRemoteRepositoryHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
-typedef HomeLocalRepositoryRef = AutoDisposeProviderRef<HomeLocalRepository>;
+typedef SongRemoteRepositoryRef = AutoDisposeProviderRef<SongRemoteRepository>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

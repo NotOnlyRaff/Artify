@@ -44,4 +44,7 @@ class SongArtist(Base):
     artist = relationship("Artist", back_populates="song_artist_links")
 
     def __repr__(self) -> str:
-        return f"<SongArtist song_id={self.song_id!r} artist_id={self.artist_id!r} role={self.role.value!r}>"
+        return (
+            f"<SongArtist song_id={self.song_id!r} "
+            f"artist_id={self.artist_id!r} role={self.role.value!r}>"
+        )

@@ -1,5 +1,6 @@
 # routes/song.py
 
+import json
 import uuid
 from datetime import date
 from typing import List
@@ -21,6 +22,7 @@ from database import get_db
 from middleware.auth_middleware import auth_middleware
 from models.favorite import Favorite
 from models.song import Song
+from models.songArtist import SongArtist, SongArtistRole
 from schemas.favorite_song import FavoriteSong
 from schemas.song import SongOut
 
@@ -65,6 +67,7 @@ async def upload_song(
     genre: str | None = Form(None),
     lyrics: str | None = Form(None),
     mood: str | None = Form(None),
+    artist_ids_json: str | None = Form(None), 
     db: Session = Depends(get_db),
     auth_dict: dict = Depends(auth_middleware),
 ):
@@ -118,6 +121,25 @@ async def upload_song(
     )
 
     db.add(db_song)
+    db.flush()
+        # 2) crea le righe SongArtist
+    if artist_ids_json:
+      try:
+        artist_ids: list[str] = json.loads(artist_ids_json)
+      except json.JSONDecodeError:
+        artist_ids = []
+
+      for artist_id in artist_ids:
+        if not artist_id:
+          continue
+        link = SongArtist(
+            id=str(uuid.uuid4()),
+            song_id=song_id,
+            artist_id=artist_id,
+            role=SongArtistRole.PRIMARY,  # per ora tutti PRIMARY
+        )
+        db.add(link)
+
     db.commit()
     db.refresh(db_song)
 

@@ -13,11 +13,11 @@ class LibraryPage extends ConsumerWidget {
     return ref.watch(getFavSongsProvider).when(
           data: (data) {
             if (data.isEmpty) {
-              return Center(
+              return const Center(
                 child: Text(
                   'No favorite songs yet.\nStart adding tracks to your library.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
                   ),

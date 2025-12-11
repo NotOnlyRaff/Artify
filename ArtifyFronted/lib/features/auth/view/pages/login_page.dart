@@ -386,10 +386,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ).copyWith(
-                  backgroundColor: MaterialStateProperty.resolveWith(
+                  backgroundColor: WidgetStateProperty.resolveWith(
                     (states) => null,
                   ),
-                  elevation: MaterialStateProperty.all(6),
+                  elevation: WidgetStateProperty.all(6),
                 ),
                 child: Ink(
                   decoration: BoxDecoration(

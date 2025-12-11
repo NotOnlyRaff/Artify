@@ -43,13 +43,13 @@ class MusicPlayer extends ConsumerWidget {
 
     // Se per qualche motivo non c'è un brano selezionato
     if (currentSong == null) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
           child: Center(
             child: Text(
               'No track playing',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white70,
                 fontSize: 16,
               ),
@@ -242,70 +242,67 @@ class MusicPlayer extends ConsumerWidget {
                         const SizedBox(height: 20),
 
                         // 🔹 Slider + tempi
-                        if (player != null)
-                          StreamBuilder<Duration>(
-                            stream: player.positionStream,
-                            builder: (context, snapshot) {
-                              final position = snapshot.data ?? Duration.zero;
-                              final duration = player.duration;
+                        StreamBuilder<Duration>(
+                          stream: player.positionStream,
+                          builder: (context, snapshot) {
+                            final position = snapshot.data ?? Duration.zero;
+                            final duration = player.duration;
 
-                              double sliderValue = 0.0;
-                              bool canSeek = false;
+                            double sliderValue = 0.0;
+                            bool canSeek = false;
 
-                              if (duration != null &&
-                                  duration.inMilliseconds > 0) {
-                                sliderValue = (position.inMilliseconds /
-                                        duration.inMilliseconds)
-                                    .clamp(0.0, 1.0)
-                                    .toDouble(); // piccolo hardening
-                                canSeek = true;
-                              }
+                            if (duration != null &&
+                                duration.inMilliseconds > 0) {
+                              sliderValue = (position.inMilliseconds /
+                                      duration.inMilliseconds)
+                                  .clamp(0.0, 1.0)
+                                  .toDouble(); // piccolo hardening
+                              canSeek = true;
+                            }
 
-                              return Column(
-                                children: [
-                                  SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      activeTrackColor: Colors.white,
-                                      inactiveTrackColor: Colors.white12,
-                                      thumbColor: Colors.white,
-                                      trackHeight: 4,
-                                      overlayShape:
-                                          SliderComponentShape.noOverlay,
-                                    ),
-                                    child: Slider(
-                                      value: sliderValue,
-                                      min: 0,
-                                      max: 1,
-                                      onChanged: canSeek ? (_) {} : null,
-                                      onChangeEnd:
-                                          canSeek ? songNotifier.seek : null,
-                                    ),
+                            return Column(
+                              children: [
+                                SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    activeTrackColor: Colors.white,
+                                    inactiveTrackColor: Colors.white12,
+                                    thumbColor: Colors.white,
+                                    trackHeight: 4,
+                                    overlayShape:
+                                        SliderComponentShape.noOverlay,
                                   ),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        _formatDuration(position),
-                                        style: const TextStyle(
-                                          color: Pallete.subtitleText,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      Text(
-                                        _formatDuration(duration),
-                                        style: const TextStyle(
-                                          color: Pallete.subtitleText,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                  child: Slider(
+                                    value: sliderValue,
+                                    min: 0,
+                                    max: 1,
+                                    onChanged: canSeek ? (_) {} : null,
+                                    onChangeEnd:
+                                        canSeek ? songNotifier.seek : null,
                                   ),
-                                ],
-                              );
-                            },
-                          )
-                        else
-                          const SizedBox(height: 48),
+                                ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _formatDuration(position),
+                                      style: const TextStyle(
+                                        color: Pallete.subtitleText,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      _formatDuration(duration),
+                                      style: const TextStyle(
+                                        color: Pallete.subtitleText,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
+                        ),
 
                         const SizedBox(height: 24),
 

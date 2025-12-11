@@ -91,7 +91,7 @@ class ArtifyBottomNav extends StatelessWidget {
                 ),
                 label: 'Library',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(
                   Icons.admin_panel_settings_outlined,
                   size: 24,

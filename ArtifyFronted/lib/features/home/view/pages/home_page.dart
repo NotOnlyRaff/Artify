@@ -56,11 +56,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: pages[_selectedIndex],
                 ),
               ),
-              Positioned(
+              const Positioned(
                 left: 0,
                 right: 0,
                 bottom: _bottomNavHeight + _musicSlabPaddingBottom,
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: MusicSlab(),
                 ),

@@ -10,6 +10,8 @@ import 'package:client/features/home/admin/view/widgets/uploadSong/upload_text_f
 import 'package:client/features/home/admin/view/widgets/uploadSong/upload_release_date_field.dart';
 import 'package:client/features/home/admin/view/widgets/uploadSong/upload_lyrics_field.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
+import 'package:client/features/home/artist/model/artist_model.dart';
+import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,8 +32,11 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
   final moodController = TextEditingController();
   final lyricsController = TextEditingController();
 
-  // 👇 nuovo
-  final artistIdsController = TextEditingController();
+  // Search artists
+  final TextEditingController _artistSearchController =
+      TextEditingController();
+  String _artistSearchQuery = '';
+  final List<ArtistModel> _selectedArtists = [];
 
   // --- RELEASE DATE ---
   DateTime? _releaseDate;
@@ -70,7 +75,7 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
     genreController.dispose();
     moodController.dispose();
     lyricsController.dispose();
-    artistIdsController.dispose();
+    _artistSearchController.dispose();
     super.dispose();
   }
 
@@ -122,14 +127,6 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
     }
   }
 
-  List<String> _parseIds(String raw) {
-    return raw
-        .split(RegExp(r'[,\s]+'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
   // ---------- SUBMIT ----------
 
   Future<void> _submit() async {
@@ -141,9 +138,6 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
     final genre = genreController.text.trim();
     final mood = moodController.text.trim();
     final lyrics = lyricsController.text.trim();
-    final artistIdsRaw = artistIdsController.text.trim();
-    final artistIds =
-        artistIdsRaw.isEmpty ? <String>[] : _parseIds(artistIdsRaw);
 
     if (songName.isEmpty ||
         composerName.isEmpty ||
@@ -159,6 +153,9 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
 
     final audioFile = selectedAudio!;
     final imageFile = selectedImage!;
+
+    // IDs degli artisti selezionati (da search)
+    final artistIds = _selectedArtists.map((a) => a.id).toList();
 
     await ref.read(songViewModelProvider.notifier).uploadSong(
           selectedAudio: audioFile,
@@ -372,7 +369,7 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
       ],
     );
 
-    // Colonna dettagli (campi testo + lyrics)
+    // Colonna dettagli (campi testo + lyrics + artisti)
     final detailsColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -424,21 +421,7 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
           onTap: (m) => moodController.text = m,
         ),
         const SizedBox(height: 22),
-        const ArtifySectionTitle('Linked artists'),
-        const SizedBox(height: 8),
-        UploadTextField(
-          label: 'Artist IDs',
-          placeholder: 'Artist IDs (comma or space separated)',
-          controller: artistIdsController,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Tip: use internal artist IDs from the admin / API.',
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white38,
-            fontSize: 11,
-          ),
-        ),
+        _buildLinkedArtistsSection(),
         const SizedBox(height: 22),
         const ArtifySectionTitle('Lyrics'),
         const SizedBox(height: 8),
@@ -531,27 +514,229 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
           onTap: (m) => moodController.text = m,
         ),
         const SizedBox(height: 22),
-        const ArtifySectionTitle('Linked artists'),
-        const SizedBox(height: 8),
-        UploadTextField(
-          label: 'Artist IDs',
-          placeholder: 'Artist IDs (comma or space separated)',
-          controller: artistIdsController,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Tip: use internal artist IDs from the admin / API.',
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white38,
-            fontSize: 11,
-          ),
-        ),
+        _buildLinkedArtistsSection(),
         const SizedBox(height: 22),
         const ArtifySectionTitle('Lyrics'),
         const SizedBox(height: 8),
         UploadLyricsField(
           controller: lyricsController,
         ),
+      ],
+    );
+  }
+
+  // ---------- LINKED ARTISTS SECTION ----------------------------------------
+
+  Widget _buildLinkedArtistsSection() {
+    final trimmedQuery = _artistSearchQuery.trim();
+    final bool enableSearch = trimmedQuery.length >= 2;
+
+    final artistsAsync = enableSearch
+        ? ref.watch(
+            getArtistsProvider(
+              search: trimmedQuery,
+            ),
+          )
+        : const AsyncValue<List<ArtistModel>>.data([]);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const ArtifySectionTitle('Linked artists'),
+        const SizedBox(height: 8),
+
+        // Chips degli artisti selezionati
+        if (_selectedArtists.isNotEmpty) ...[
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _selectedArtists.map((artist) {
+              final displayName = artist.displayName?.isNotEmpty == true
+                  ? artist.displayName!
+                  : artist.name;
+              return Chip(
+                label: Text(
+                  displayName,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: Colors.white,
+                  ),
+                ),
+                backgroundColor: Colors.white.withOpacity(0.06),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  side: BorderSide(
+                    color: Colors.white.withOpacity(0.14),
+                  ),
+                ),
+                deleteIcon: const Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: Colors.white70,
+                ),
+                onDeleted: () {
+                  setState(() {
+                    _selectedArtists
+                        .removeWhere((a) => a.id == artist.id);
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Campo ricerca
+        TextField(
+          controller: _artistSearchController,
+          onChanged: (value) {
+            setState(() {
+              _artistSearchQuery = value;
+            });
+          },
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white,
+            fontSize: 13,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Search artist by name...',
+            hintStyle: GoogleFonts.plusJakartaSans(
+              color: Colors.white54,
+              fontSize: 13,
+            ),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.03),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(999),
+              borderSide: BorderSide(
+                color: Colors.white.withOpacity(0.16),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(999),
+              borderSide: const BorderSide(
+                color: Pallete.gradient2,
+                width: 1.2,
+              ),
+            ),
+            suffixIcon: const Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: Colors.white54,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          enableSearch
+              ? 'Type to search artists in your catalog.'
+              : 'Type at least 2 characters to search artists.',
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white38,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Risultati di ricerca
+        if (enableSearch)
+          artistsAsync.when(
+            data: (artists) {
+              final filtered = artists
+                  .where((a) =>
+                      !_selectedArtists.any((sel) => sel.id == a.id))
+                  .toList();
+
+              if (filtered.isEmpty) {
+                return Text(
+                  'No artists found for "$trimmedQuery".',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white38,
+                    fontSize: 11,
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: filtered.take(6).map((artist) {
+                  final displayName =
+                      artist.displayName?.isNotEmpty == true
+                          ? artist.displayName!
+                          : artist.name;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (!_selectedArtists
+                            .any((a) => a.id == artist.id)) {
+                          _selectedArtists.add(artist);
+                        }
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withOpacity(0.06),
+                            ),
+                            child: const Icon(
+                              Icons.person_rounded,
+                              size: 16,
+                              color: Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              displayName,
+                              style: GoogleFonts.plusJakartaSans(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.add_rounded,
+                            size: 18,
+                            color: Colors.white70,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Pallete.gradient2,
+                ),
+              ),
+            ),
+            error: (e, _) => Text(
+              e.toString(),
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.redAccent,
+                fontSize: 11,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -583,8 +768,10 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
                 (s) => GestureDetector(
                   onTap: () => onTap(s),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       color: Colors.white.withOpacity(0.03),

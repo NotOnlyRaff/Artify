@@ -1,7 +1,7 @@
 // lib/features/home/models/song_model.dart
 
 import '../../album/model/album_model.dart';
-import 'song_artist_model.dart'; // 👈 nuovo import
+import 'song_artist_model.dart';
 
 class SongModel {
   final String id;
@@ -12,12 +12,13 @@ class SongModel {
 
   final DateTime? releaseDate;
   final String composerName;
-  final String? beatProducerName;
+  final String? producerName;     // 👈 allineato a producer_name
   final String? genre;
   final String? lyrics;
   final String? mood;
 
-  final List<SongArtistLinkModel> artists; // dal file separato
+  /// Lista dei link Song–Artist (SongArtistLinkModel), come da backend (SongArtistOut)
+  final List<SongArtistLinkModel> artists;
   final List<AlbumModel> albums;
 
   const SongModel({
@@ -28,7 +29,7 @@ class SongModel {
     this.durationSeconds,
     this.releaseDate,
     required this.composerName,
-    this.beatProducerName,
+    this.producerName,
     this.genre,
     this.lyrics,
     this.mood,
@@ -44,7 +45,7 @@ class SongModel {
     int? durationSeconds,
     DateTime? releaseDate,
     String? composerName,
-    String? beatProducerName,
+    String? producerName,
     String? genre,
     String? lyrics,
     String? mood,
@@ -59,7 +60,7 @@ class SongModel {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       releaseDate: releaseDate ?? this.releaseDate,
       composerName: composerName ?? this.composerName,
-      beatProducerName: beatProducerName ?? this.beatProducerName,
+      producerName: producerName ?? this.producerName,
       genre: genre ?? this.genre,
       lyrics: lyrics ?? this.lyrics,
       mood: mood ?? this.mood,
@@ -79,11 +80,12 @@ class SongModel {
           ? DateTime.parse(map['release_date'] as String)
           : null,
       composerName: map['composer_name'] as String,
-      beatProducerName: map['beat_producer_name'] as String?,
+      producerName: map['producer_name'] as String?,   // 👈 chiave corretta
       genre: map['genre'] as String?,
       lyrics: map['lyrics'] as String?,
       mood: map['mood'] as String?,
-      artists: (map['artists'] as List<dynamic>? ?? [])
+      // 👇 backend: SongOut.artist_links
+      artists: (map['artist_links'] as List<dynamic>? ?? [])
           .map(
             (e) => SongArtistLinkModel.fromMap(
               e as Map<String, dynamic>,
@@ -111,11 +113,12 @@ class SongModel {
           ? DateTime.parse(json['release_date'] as String)
           : null,
       composerName: json['composer_name'] as String,
-      beatProducerName: json['beat_producer_name'] as String?,
+      producerName: json['producer_name'] as String?,  // 👈 chiave corretta
       genre: json['genre'] as String?,
       lyrics: json['lyrics'] as String?,
       mood: json['mood'] as String?,
-      artists: (json['artists'] as List<dynamic>? ?? [])
+      // 👇 qui leggiamo artist_links, non artists
+      artists: (json['artist_links'] as List<dynamic>? ?? [])
           .map(
             (e) => SongArtistLinkModel.fromJson(
               e as Map<String, dynamic>,
@@ -141,17 +144,31 @@ class SongModel {
       'duration_seconds': durationSeconds,
       'release_date': releaseDate?.toIso8601String(),
       'composer_name': composerName,
-      'beat_producer_name': beatProducerName,
+      'producer_name': producerName,                 // 👈 allineato al backend
       'genre': genre,
       'lyrics': lyrics,
       'mood': mood,
-      'artists': artists.map((e) => e.toJson()).toList(),
+      'artist_links': artists.map((e) => e.toJson()).toList(),
       'albums': albums.map((e) => e.toJson()).toList(),
     };
   }
 
   @override
   String toString() {
-    return 'SongModel(id: $id, songName: $songName, songUrl: $songUrl, thumbnailUrl: $thumbnailUrl, durationSeconds: $durationSeconds, releaseDate: $releaseDate, composerName: $composerName, beatProducerName: $beatProducerName, genre: $genre, lyrics: $lyrics, mood: $mood, artists: $artists, albums: $albums)';
+    return 'SongModel('
+        'id: $id, '
+        'songName: $songName, '
+        'songUrl: $songUrl, '
+        'thumbnailUrl: $thumbnailUrl, '
+        'durationSeconds: $durationSeconds, '
+        'releaseDate: $releaseDate, '
+        'composerName: $composerName, '
+        'producerName: $producerName, '
+        'genre: $genre, '
+        'lyrics: $lyrics, '
+        'mood: $mood, '
+        'artists: $artists, '
+        'albums: $albums'
+        ')';
   }
 }

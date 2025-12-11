@@ -4,14 +4,10 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+from schemas.songArtist import SongArtistOut  # 👈 importa l'output del link
+# se il modulo ha nome diverso (es. pydantic_schemas.song_artist), adatta l'import
 
-class ArtistRef(BaseModel):
-    id: str
-    name: str
-
-    class Config:
-        orm_mode = True
-
+# --- REF MINIMALE PER ALBUM ---
 
 class AlbumRef(BaseModel):
     id: str
@@ -20,6 +16,9 @@ class AlbumRef(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+# --- BASE / CREATE / UPDATE ---
 
 class SongBase(BaseModel):
     song_name: str
@@ -37,6 +36,7 @@ class SongCreate(SongBase):
     artist_ids: List[str] = []
     album_ids: List[str] = []
 
+
 class SongUpdate(BaseModel):
     song_name: Optional[str] = None
     release_date: Optional[date] = None
@@ -50,6 +50,8 @@ class SongUpdate(BaseModel):
     artist_ids: Optional[List[str]] = None
     album_ids: Optional[List[str]] = None
 
+
+# --- OUTPUT PRINCIPALE USATO DALLE API ---
 
 class SongOut(BaseModel):
     id: str
@@ -66,7 +68,10 @@ class SongOut(BaseModel):
     mood: Optional[str] = None
     duration_seconds: Optional[int] = None
 
-    artists: List[ArtistRef] = []
+    # 👇 elenco dei link song–artist, con ruolo e artista annesso
+    artist_links: List[SongArtistOut] = []
+
+    # elenco degli album a cui il brano appartiene (minimal ref)
     albums: List[AlbumRef] = []
 
     class Config:

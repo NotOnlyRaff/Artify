@@ -42,7 +42,7 @@ String songArtistRoleToString(SongArtistRole role) {
   }
 }
 
-/// Link Song ⟷ Artist con ruolo (mappa 1:1 con SongArtist del backend)
+/// Link Song ⟷ Artist con ruolo (1:1 con SongArtistOut del backend)
 class SongArtistLinkModel {
   final String id;
   final SongArtistRole role;
@@ -70,6 +70,7 @@ class SongArtistLinkModel {
     return SongArtistLinkModel(
       id: map['id'] as String,
       role: songArtistRoleFromString(map['role'] as String),
+      // NB: il backend manda anche "song": {...} che qui ignoriamo
       artist: ArtistModel.fromMap(map['artist'] as Map<String, dynamic>),
     );
   }

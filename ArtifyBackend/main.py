@@ -8,8 +8,8 @@ app = FastAPI()
 
 # ⬇⬇ CORS (sviluppo: puoi anche usare "*" se vuoi semplificare)
 origins = [
-    "http://localhost:53646",  # porta di Flutter Web (controlla quella reale)
-    "http://127.0.0.1:53646",
+    "http://localhost:57605",  # porta di Flutter Web (controlla quella reale)
+    "http://127.0.0.1:57605",
     "http://localhost:8000",   # opzionale, ma non fa male
 ]
 

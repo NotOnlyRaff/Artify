@@ -67,7 +67,8 @@ async def upload_song(
     genre: str | None = Form(None),
     lyrics: str | None = Form(None),
     mood: str | None = Form(None),
-    artist_ids_json: str | None = Form(None), 
+    # 👇 array di ID artista, serializzato come JSON dalla mobile/web app
+    artist_ids_json: str | None = Form(None),
     db: Session = Depends(get_db),
     auth_dict: dict = Depends(auth_middleware),
 ):
@@ -75,8 +76,9 @@ async def upload_song(
     Carica una nuova traccia su Cloudinary + DB.
 
     - `song`      : file audio
-    - `thumbnail` : cover dell track
+    - `thumbnail` : cover della track
     - metadata    : nome, data di uscita, compositore, ecc.
+    - `artist_ids_json`: JSON array di artist_id da collegare come PRIMARY
     """
 
     if song.content_type not in ALLOWED_CONTENT_TYPES:
@@ -117,21 +119,24 @@ async def upload_song(
         genre=genre,
         lyrics=lyrics,
         mood=mood,
-        # duration_seconds: per ora puoi lasciarlo null e popolarlo in futuro
+        # duration_seconds: per ora null, potrai popolarlo lato worker/cron
     )
 
     db.add(db_song)
-    db.flush()
-        # 2) crea le righe SongArtist
-    if artist_ids_json:
-      try:
-        artist_ids: list[str] = json.loads(artist_ids_json)
-      except json.JSONDecodeError:
-        artist_ids = []
+    db.flush()  # ora esiste in sessione, possiamo creare i link
 
-      for artist_id in artist_ids:
-        if not artist_id:
-          continue
+    # 3) crea le righe SongArtist (se sono stati passati degli artist_id)
+    artist_ids: list[str] = []
+    if artist_ids_json:
+        try:
+            parsed = json.loads(artist_ids_json)
+            if isinstance(parsed, list):
+                artist_ids = [str(a) for a in parsed if a]
+        except json.JSONDecodeError:
+            # se arriva corrotto, non blocchiamo l'upload ma logghiamo
+            artist_ids = []
+
+    for artist_id in artist_ids:
         link = SongArtist(
             id=str(uuid.uuid4()),
             song_id=song_id,
@@ -143,7 +148,6 @@ async def upload_song(
     db.commit()
     db.refresh(db_song)
 
-    # Grazie a orm_mode, il SongOut viene creato dalla entity
     return db_song
 
 
@@ -192,13 +196,16 @@ def list_songs(
     songs = (
         db.query(Song)
         .options(
-            joinedload(Song.artists),
+            # 🔹 carica i link song–artist + artista
+            joinedload(Song.song_artist_links)
+            .joinedload(SongArtist.artist),
+
+            # 🔹 carica gli album collegati
             joinedload(Song.albums),
         )
         .all()
     )
     return songs
-
 
 # ---------- TOGGLE FAVORITE ----------
 
@@ -265,13 +272,13 @@ def list_fav_songs(
         .filter(Favorite.user_id == user_id)
         .options(
             joinedload(Favorite.song)
-            .joinedload(Song.artists),
+            .joinedload(Song.song_artist_links)
+            .joinedload(SongArtist.artist),
             joinedload(Favorite.song)
             .joinedload(Song.albums),
         )
         .all()
     )
 
-    # Ritorniamo direttamente la lista di Song
     songs = [fav.song for fav in fav_rows]
     return songs

@@ -23,7 +23,7 @@ from middleware.auth_middleware import auth_middleware
 from models.favorite import Favorite
 from models.song import Song
 from models.songArtist import SongArtist, SongArtistRole
-from schemas.favorite_song import FavoriteSong
+from schemas.favorite import FavoriteSong
 from schemas.song import SongOut
 
 

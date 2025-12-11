@@ -1,9 +1,8 @@
-from sqlalchemy import TEXT, Column, ForeignKey, VARCHAR
+from sqlalchemy import TEXT, Column, ForeignKey, VARCHAR, UniqueConstraint
 from sqlalchemy.orm import relationship
 from models.base import Base
 
 
-# Album <-> Artist (artisti accreditati dell'album)
 class AlbumArtist(Base):
     __tablename__ = "album_artists"
 
@@ -20,10 +19,12 @@ class AlbumArtist(Base):
         nullable=False,
     )
 
-    # ruolo sull'ALBUM (es. due primary artist, altri come 'guest')
     role = Column(VARCHAR(30), nullable=True)  # 'primary', 'guest', ecc.
 
-    # 🔹 relazioni esplicite verso Album e Artist
+    __table_args__ = (
+        UniqueConstraint("album_id", "artist_id", "role", name="uq_album_artist_role"),
+    )
+
     album = relationship(
         "Album",
         back_populates="album_artist_links",

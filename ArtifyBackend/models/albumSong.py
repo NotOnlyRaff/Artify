@@ -1,4 +1,4 @@
-from sqlalchemy import TEXT, Column, ForeignKey, Integer
+from sqlalchemy import TEXT, Column, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship
 from models.base import Base
 
@@ -19,12 +19,12 @@ class AlbumSong(Base):
         nullable=False,
     )
 
-    # opzionale: traccia nell'album
     track_number = Column(Integer, nullable=True)
-    # se vuoi supportare album multi-disc, puoi aggiungere:
-    # disc_number = Column(Integer, nullable=True)
 
-    # 🔹 lato Album / Song con back_populates
+    __table_args__ = (
+        UniqueConstraint("album_id", "song_id", name="uq_album_song"),
+    )
+
     album = relationship(
         "Album",
         back_populates="album_song_links",

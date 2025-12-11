@@ -10,7 +10,6 @@ class Artist(Base):
     name = Column(VARCHAR(255), nullable=False)
     display_name = Column(VARCHAR(120), nullable=True)
 
-    # Slug per URL / ricerche (unico ma non obbligatorio in MVP)
     slug = Column(
         VARCHAR(140),
         unique=True,
@@ -18,16 +17,11 @@ class Artist(Base):
         nullable=True,
     )
 
-    # Immagine profilo / cover dell’artista
     image_url = Column(TEXT, nullable=True)
-
-    # Breve bio / descrizione (facoltativa)
     bio = Column(TEXT, nullable=True)
-
-    # Paese / area geografica (opzionale ma utile per filtri futuri)
     country = Column(VARCHAR(80), nullable=True)
 
-    # ---------- RELAZIONI ----------
+    # --- Relazioni ---
 
     song_artist_links = relationship(
         "SongArtist",
@@ -41,7 +35,6 @@ class Artist(Base):
         cascade="all, delete-orphan",
     )
 
-    # M:N di comodo: canzoni dell'artista (SOLO LETTURA)
     songs = relationship(
         "Song",
         secondary="song_artists",
@@ -50,7 +43,6 @@ class Artist(Base):
         overlaps="song_artist_links,artist,song,artists",
     )
 
-    # M:N di comodo: album dell'artista (SOLO LETTURA)
     albums = relationship(
         "Album",
         secondary="album_artists",

@@ -1,15 +1,33 @@
 # schemas/song.py
+
 from datetime import date
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from schemas.songArtist import SongArtistOut  # 👈 importa l'output del link
-# se il modulo ha nome diverso (es. pydantic_schemas.song_artist), adatta l'import
+from schemas.songArtist import SongArtistOut  # se il path è diverso, adattalo
 
-# --- REF MINIMALE PER ALBUM ---
+
+# --- REF MINIMALI USATI DA ALBUM E SONG ---
+
+
+class ArtistRef(BaseModel):
+    """
+    Versione leggera di Artist usata dentro Song e Album.
+    """
+    id: str
+    name: str
+    display_name: Optional[str] = None
+    image_url: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
 
 class AlbumRef(BaseModel):
+    """
+    Versione leggera di Album usata dentro Song.
+    """
     id: str
     title: str
     cover_url: Optional[str] = None
@@ -19,6 +37,7 @@ class AlbumRef(BaseModel):
 
 
 # --- BASE / CREATE / UPDATE ---
+
 
 class SongBase(BaseModel):
     song_name: str
@@ -32,12 +51,21 @@ class SongBase(BaseModel):
 
 
 class SongCreate(SongBase):
-    # Associazioni logiche: chi ha fatto il brano e a quali album appartiene
-    artist_ids: List[str] = []
-    album_ids: List[str] = []
+    """
+    Payload di input per creare un brano.
+    artist_ids e album_ids servono a popolare le tabelle di join.
+    Se gestisci song_url a livello di servizio (es. dopo upload su S3),
+    puoi continuare a non richiederlo nel payload.
+    """
+    artist_ids: List[str] = Field(default_factory=list)
+    album_ids: List[str] = Field(default_factory=list)
 
 
 class SongUpdate(BaseModel):
+    """
+    Payload di aggiornamento parziale.
+    Tutto opzionale.
+    """
     song_name: Optional[str] = None
     release_date: Optional[date] = None
     composer_name: Optional[str] = None
@@ -53,7 +81,11 @@ class SongUpdate(BaseModel):
 
 # --- OUTPUT PRINCIPALE USATO DALLE API ---
 
+
 class SongOut(BaseModel):
+    """
+    Come viene serializzato un brano verso il frontend.
+    """
     id: str
 
     song_name: str
@@ -68,11 +100,16 @@ class SongOut(BaseModel):
     mood: Optional[str] = None
     duration_seconds: Optional[int] = None
 
-    # 👇 elenco dei link song–artist, con ruolo e artista annesso
-    artist_links: List[SongArtistOut] = []
+    # join esplicite song <-> artist (con ruolo, ecc.)
+    # NB: il nome del campo ora combacia con la relationship SQLAlchemy:
+    # Song.song_artist_links
+    song_artist_links: List[SongArtistOut] = Field(default_factory=list)
 
-    # elenco degli album a cui il brano appartiene (minimal ref)
-    albums: List[AlbumRef] = []
+    # lista di artisti (M:N "di comodo", via Song.artists)
+    artists: List[ArtistRef] = Field(default_factory=list)
+
+    # lista di album (M:N "di comodo", via Song.albums)
+    albums: List[AlbumRef] = Field(default_factory=list)
 
     class Config:
         orm_mode = True

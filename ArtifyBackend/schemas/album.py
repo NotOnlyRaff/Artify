@@ -3,16 +3,16 @@
 from datetime import date
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-# Riutilizziamo il ref dell'artista già definito negli schemi di Song
+# ATTENZIONE: aggiorna l'import al path reale del tuo progetto
+# prima era: from schemas.song import ArtistRef
 from schemas.song import ArtistRef
 
 
 class SongRef(BaseModel):
     """
-    Versione "leggera" di Song usata dentro un Album.
-    Non serve tutto SongOut, bastano pochi campi.
+    Versione leggera di Song usata dentro un Album.
     """
     id: str
     song_name: str
@@ -38,8 +38,9 @@ class AlbumCreate(AlbumBase):
     Il FE ti manda gli id di artisti e song da collegare.
     """
     cover_url: Optional[str] = None
-    artist_ids: List[str] = []
-    song_ids: List[str] = []
+    # usare Field(default_factory=list) evita problemi di default mutabile
+    artist_ids: List[str] = Field(default_factory=list)
+    song_ids: List[str] = Field(default_factory=list)
 
 
 class AlbumUpdate(BaseModel):
@@ -65,8 +66,8 @@ class AlbumOut(AlbumBase):
     cover_url: Optional[str] = None
     total_tracks: Optional[int] = None
 
-    artists: List[ArtistRef] = []
-    songs: List[SongRef] = []
+    artists: List[ArtistRef] = Field(default_factory=list)
+    songs: List[SongRef] = Field(default_factory=list)
 
     class Config:
         orm_mode = True

@@ -1,19 +1,17 @@
-# models/song_artist.py
-
 import enum
 
-from sqlalchemy import TEXT, Column, ForeignKey, Enum as SAEnum
+from sqlalchemy import TEXT, Column, ForeignKey, Enum as SAEnum, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from models.base import Base
 
 
 class SongArtistRole(enum.Enum):
-    PRIMARY = "primary"        # artista principale
-    FEATURED = "featured"      # feat.
-    PRODUCER = "producer"      # producer
-    MIXER = "mixer"            # mixer
-    WRITER = "writer"          # autore / songwriter
+    PRIMARY = "primary"
+    FEATURED = "featured"
+    PRODUCER = "producer"
+    MIXER = "mixer"
+    WRITER = "writer"
 
 
 class SongArtist(Base):
@@ -32,14 +30,16 @@ class SongArtist(Base):
         nullable=False,
     )
 
-    # Il ruolo dell'artista rispetto a QUEL brano
     role = Column(
         SAEnum(SongArtistRole, name="song_artist_role"),
         nullable=False,
         default=SongArtistRole.PRIMARY,
     )
 
-    # Relazioni verso i due estremi
+    __table_args__ = (
+        UniqueConstraint("song_id", "artist_id", "role", name="uq_song_artist_role"),
+    )
+
     song = relationship("Song", back_populates="song_artist_links")
     artist = relationship("Artist", back_populates="song_artist_links")
 

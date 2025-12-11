@@ -1,7 +1,8 @@
 # pydantic_schemas/artist.py
 
 from typing import List, Optional
-from pydantic import BaseModel
+
+from pydantic import BaseModel, Field
 
 from schemas.album import SongRef   # id, song_name, thumbnail_url
 from schemas.song import AlbumRef   # id, title, cover_url
@@ -24,8 +25,8 @@ class ArtistCreate(ArtistBase):
     Payload in input quando crei un artista.
     Puoi opzionalmente collegare già brani e album.
     """
-    song_ids: List[str] = []
-    album_ids: List[str] = []
+    song_ids: List[str] = Field(default_factory=list)
+    album_ids: List[str] = Field(default_factory=list)
 
 
 class ArtistUpdate(BaseModel):
@@ -49,8 +50,10 @@ class ArtistOut(ArtistBase):
     Rappresentazione pubblica di un artista verso il FE.
     """
     id: str
-    songs: List[SongRef] = []
-    albums: List[AlbumRef] = []
+
+    # liste derivate dalle relazioni Artist.songs e Artist.albums
+    songs: List[SongRef] = Field(default_factory=list)
+    albums: List[AlbumRef] = Field(default_factory=list)
 
     class Config:
         orm_mode = True

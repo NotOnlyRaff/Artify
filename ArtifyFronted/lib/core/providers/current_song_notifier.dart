@@ -41,7 +41,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       (link) => link.role == SongArtistRole.primary,
     );
 
-    final SongArtistLinkModel chosen =
+    final SongArtistModel chosen =
         primary.isNotEmpty ? primary.first : song.artists.first;
 
     return chosen.artist.name;

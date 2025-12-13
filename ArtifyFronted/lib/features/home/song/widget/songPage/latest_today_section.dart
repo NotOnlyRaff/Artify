@@ -5,7 +5,7 @@ import 'package:client/core/providers/current_song_notifier.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:client/core/theme/app_pallete.dart';
-import 'package:client/features/home/song/widget/songPage/song_artist_formatter.dart';
+import 'package:client/features/home/song/widget/SongPage/song_artist_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';

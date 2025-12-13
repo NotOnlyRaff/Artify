@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
-import 'package:client/core/models/user_model.dart';
+import 'package:client/features/auth/models/user_model.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -38,11 +38,14 @@ class AuthRemoteRepository {
       final resBodyMap = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode != 201) {
-        // {'detail': 'error message'}
-        return Left(AppFailure(resBodyMap['detail']));
+        if (resBodyMap['detail'] != null) {
+          return Left(AppFailure(_extractErrorMessage(resBodyMap)));
+        }
+        return Left(AppFailure(response.body));
       }
 
-      return Right(UserModel.fromMap(resBodyMap));
+      final resBodyMapD = resBodyMap;
+      return Right(UserModel.fromMap(resBodyMapD));
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
@@ -108,5 +111,28 @@ class AuthRemoteRepository {
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
+  }
+
+  String _extractErrorMessage(Map<String, dynamic> resBodyMap) {
+    final detail = resBodyMap['detail'];
+
+    if (detail is String) {
+      return detail;
+    }
+
+    // Caso tipico FastAPI: [{"loc": [...], "msg": "...", "type": "..."}]
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] is String) {
+        return first['msg'] as String;
+      }
+      return detail.toString();
+    }
+
+    if (detail is Map && detail['msg'] is String) {
+      return detail['msg'] as String;
+    }
+
+    return detail?.toString() ?? 'Unknown error';
   }
 }

@@ -1,4 +1,6 @@
-// lib/features/home/models/artist_model.dart
+import 'package:client/features/home/models/artist_album_model.dart';
+import 'package:client/features/home/models/fav_song_model.dart';
+import 'package:flutter/foundation.dart';
 
 class ArtistModel {
   final String id;
@@ -9,6 +11,10 @@ class ArtistModel {
   final String? bio;
   final String? country;
 
+  // 🔹 nuovi campi allineati a ArtistOut
+  final List<FavSongModel> songs;
+  final List<ArtistAlbumModel> albums;
+
   const ArtistModel({
     required this.id,
     required this.name,
@@ -17,6 +23,8 @@ class ArtistModel {
     this.imageUrl,
     this.bio,
     this.country,
+    this.songs = const [],
+    this.albums = const [],
   });
 
   ArtistModel copyWith({
@@ -27,6 +35,8 @@ class ArtistModel {
     String? imageUrl,
     String? bio,
     String? country,
+    List<FavSongModel>? songs,
+    List<ArtistAlbumModel>? albums,
   }) {
     return ArtistModel(
       id: id ?? this.id,
@@ -36,6 +46,8 @@ class ArtistModel {
       imageUrl: imageUrl ?? this.imageUrl,
       bio: bio ?? this.bio,
       country: country ?? this.country,
+      songs: songs ?? this.songs,
+      albums: albums ?? this.albums,
     );
   }
 
@@ -48,6 +60,16 @@ class ArtistModel {
       imageUrl: map['image_url'] as String?,
       bio: map['bio'] as String?,
       country: map['country'] as String?,
+      songs: (map['songs'] as List<dynamic>? ?? [])
+          .map(
+            (e) => FavSongModel.fromMap(e as Map<String, dynamic>),
+          )
+          .toList(),
+      albums: (map['albums'] as List<dynamic>? ?? [])
+          .map(
+            (e) => ArtistAlbumModel.fromMap(e as Map<String, dynamic>),
+          )
+          .toList(),
     );
   }
 
@@ -60,6 +82,16 @@ class ArtistModel {
       imageUrl: json['image_url'] as String?,
       bio: json['bio'] as String?,
       country: json['country'] as String?,
+      songs: (json['songs'] as List<dynamic>? ?? [])
+          .map(
+            (e) => FavSongModel.fromMap(e as Map<String, dynamic>),
+          )
+          .toList(),
+      albums: (json['albums'] as List<dynamic>? ?? [])
+          .map(
+            (e) => ArtistAlbumModel.fromMap(e as Map<String, dynamic>),
+          )
+          .toList(),
     );
   }
 
@@ -72,12 +104,24 @@ class ArtistModel {
       'image_url': imageUrl,
       'bio': bio,
       'country': country,
+      'songs': songs.map((s) => s.toMap()).toList(),
+      'albums': albums.map((a) => a.toJson()).toList(),
     };
   }
 
   @override
   String toString() {
-    return 'ArtistModel(id: $id, name: $name, displayName: $displayName, slug: $slug, imageUrl: $imageUrl, bio: $bio, country: $country)';
+    return 'ArtistModel('
+        'id: $id, '
+        'name: $name, '
+        'displayName: $displayName, '
+        'slug: $slug, '
+        'imageUrl: $imageUrl, '
+        'bio: $bio, '
+        'country: $country, '
+        'songs: $songs, '
+        'albums: $albums'
+        ')';
   }
 
   @override
@@ -91,7 +135,9 @@ class ArtistModel {
         other.slug == slug &&
         other.imageUrl == imageUrl &&
         other.bio == bio &&
-        other.country == country;
+        other.country == country &&
+        listEquals(other.songs, songs) &&
+        listEquals(other.albums, albums);
   }
 
   @override
@@ -102,6 +148,8 @@ class ArtistModel {
         slug.hashCode ^
         imageUrl.hashCode ^
         bio.hashCode ^
-        country.hashCode;
+        country.hashCode ^
+        songs.hashCode ^
+        albums.hashCode;
   }
 }

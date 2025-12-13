@@ -11,6 +11,7 @@ class UserModel {
   final String id;
   final String token;
   final List<FavSongModel> favorites;
+
   UserModel({
     required this.name,
     required this.email,
@@ -41,7 +42,9 @@ class UserModel {
       'email': email,
       'id': id,
       'token': token,
-      'favorites': favorites.map((x) => x.toMap()).toList(),
+      // quando rimandi verso il backend, se ti serve,
+      // ti conviene usare la stessa chiave del backend:
+      'favorite_songs': favorites.map((x) => x.toMap()).toList(),
     };
   }
 
@@ -50,9 +53,10 @@ class UserModel {
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       id: map['id'] ?? '',
+      // signup e /auth/ non mandano token → resta '' e poi lo setti con copyWith
       token: map['token'] ?? '',
       favorites: List<FavSongModel>.from(
-        (map['favorites'] ?? []).map(
+        (map['favorite_songs'] as List<dynamic>? ?? []).map(
           (x) => FavSongModel.fromMap(x as Map<String, dynamic>),
         ),
       ),

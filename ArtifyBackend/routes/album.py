@@ -13,10 +13,18 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from middleware.auth_middleware import auth_middleware
+
 from models.album import Album
 from models.artist import Artist
 from models.song import Song
-from schemas.album import AlbumCreate, AlbumUpdate, AlbumOut
+from models.albumArtist import AlbumArtist      # 👈 importa la join
+from models.albumSong import AlbumSong          # 👈 importa la join
+
+from schemas.album import (
+    AlbumCreate,
+    AlbumUpdate,
+    AlbumOut,
+)
 
 router = APIRouter(tags=["albums"])
 
@@ -27,7 +35,7 @@ def _get_album_or_404(album_id: str, db: Session) -> Album:
     album = (
         db.query(Album)
         .options(
-            joinedload(Album.artists),
+            joinedload(Album.artists),  # usa la M:N viewonly
             joinedload(Album.songs),
         )
         .filter(Album.id == album_id)
@@ -99,7 +107,8 @@ def create_album(
     auth_details: dict = Depends(auth_middleware),
 ):
     """
-    Crea un nuovo album e collega artisti e songs.
+    Crea un nuovo album e collega artisti e songs tramite
+    le tabelle di join AlbumArtist e AlbumSong.
     """
     album_id = str(uuid.uuid4())
 
@@ -107,6 +116,7 @@ def create_album(
     artists = _resolve_artists(db, payload.artist_ids)
     songs = _resolve_songs(db, payload.song_ids)
 
+    # Crea l'album
     db_album = Album(
         id=album_id,
         title=payload.title,
@@ -117,12 +127,32 @@ def create_album(
         total_tracks=len(songs) if songs else None,
     )
 
-    db_album.artists = artists
-    db_album.songs = songs
+    # 🔹 CREA LE RIGHE DI JOIN (NON USARE più album.artists / album.songs: sono viewonly)
+    db_album.album_artist_links = [
+        AlbumArtist(
+            id=str(uuid.uuid4()),
+            album=db_album,
+            artist=artist,
+            role=None,  # se in futuro vorrai gestire 'primary', 'guest', ecc.
+        )
+        for artist in artists
+    ]
+
+    db_album.album_song_links = [
+        AlbumSong(
+            id=str(uuid.uuid4()),
+            album=db_album,
+            song=song,
+            track_number=None,  # qui potresti gestire in futuro l'ordine delle tracce
+        )
+        for song in songs
+    ]
 
     db.add(db_album)
     db.commit()
-    db.refresh(db_album)
+
+    # Ricarica con joinedload per avere artists/songs valorizzati
+    db_album = _get_album_or_404(album_id, db)
 
     return db_album
 
@@ -170,6 +200,7 @@ def list_albums(
     )
 
     if artist_id:
+        # usa la relazione M:N viewonly verso Artist
         query = query.join(Album.artists).filter(Artist.id == artist_id)
 
     albums = query.all()
@@ -192,7 +223,8 @@ def update_album(
     Aggiornamento parziale di un album.
 
     - Puoi cambiare metadati (titolo, label, ecc.)
-    - Puoi riassegnare lista di artisti e songs passando gli ID.
+    - Puoi riassegnare lista di artisti e songs passando gli ID:
+      in questo caso rimpiazziamo le righe di join album_artists / album_songs.
     """
     album = _get_album_or_404(album_id, db)
 
@@ -208,18 +240,50 @@ def update_album(
     if payload.cover_url is not None:
         album.cover_url = payload.cover_url
 
-    # Aggiornamento relazioni
+    # 🔹 Aggiornamento relazioni via join tables
+
+    # 1) Artisti
     if payload.artist_ids is not None:
         artists = _resolve_artists(db, payload.artist_ids)
-        album.artists = artists
 
+        # Cancella i vecchi link (delete-orphan gestito dalla relationship)
+        album.album_artist_links.clear()
+
+        # Crea nuovi link
+        for artist in artists:
+            album.album_artist_links.append(
+                AlbumArtist(
+                    id=str(uuid.uuid4()),
+                    album=album,
+                    artist=artist,
+                    role=None,
+                )
+            )
+
+    # 2) Songs
     if payload.song_ids is not None:
         songs = _resolve_songs(db, payload.song_ids)
-        album.songs = songs
+
+        # Cancella i vecchi link
+        album.album_song_links.clear()
+
+        # Crea nuovi link
+        for song in songs:
+            album.album_song_links.append(
+                AlbumSong(
+                    id=str(uuid.uuid4()),
+                    album=album,
+                    song=song,
+                    track_number=None,
+                )
+            )
+
         album.total_tracks = len(songs) if songs else None
 
     db.commit()
-    db.refresh(album)
+
+    # Ricarica con join per avere artists/songs aggiornati
+    album = _get_album_or_404(album_id, db)
 
     return album
 
@@ -238,7 +302,8 @@ def delete_album(
     """
     Cancella un album.
 
-    Le relazioni M:N con artists e songs vengono gestite tramite la join table.
+    Le join AlbumArtist / AlbumSong vengono eliminate grazie a
+    ondelete="CASCADE" + cascade="all, delete-orphan".
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:

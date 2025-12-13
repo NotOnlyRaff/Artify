@@ -20,11 +20,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from middleware.auth_middleware import auth_middleware
-from models.favorite import Favorite
+
 from models.song import Song
-from models.songArtist import SongArtist, SongArtistRole
-from schemas.favorite import FavoriteSong
-from schemas.song import SongOut
+from models.favorite import Favorite
+from models.songArtist import SongArtist, SongArtistRole  # 👈 aggiorna il path se necessario
+
+from schemas.song import SongOut                  # 👈 nuovo path Pydantic
+from schemas.favorite import FavoriteCreate       # 👈 sostituisce il vecchio FavoriteSong
 
 
 router = APIRouter(tags=["songs"])
@@ -44,7 +46,7 @@ ALLOWED_CONTENT_TYPES = {
 cloudinary.config(
     cloud_name="dgjqxcl8u",
     api_key="152778217772653",
-    api_secret="BscHrsDSpoGrKfEJhn2_X1WIolc",  # metti la tua ma NON committarla
+    api_secret="BscHrsDSpoGrKfEJhn2_X1WIolc",  # NON committare in produzione
     secure=True,
 )
 
@@ -133,7 +135,7 @@ async def upload_song(
             if isinstance(parsed, list):
                 artist_ids = [str(a) for a in parsed if a]
         except json.JSONDecodeError:
-            # se arriva corrotto, non blocchiamo l'upload ma logghiamo
+            # se arriva corrotto, non blocchiamo l'upload ma logghiamo/ignoriamo
             artist_ids = []
 
     for artist_id in artist_ids:
@@ -207,12 +209,13 @@ def list_songs(
     )
     return songs
 
+
 # ---------- TOGGLE FAVORITE ----------
 
 
 @router.post("/favorite")
 def favorite_song(
-    song: FavoriteSong,
+    payload: FavoriteCreate,   # 👈 sostituisce il vecchio FavoriteSong
     db: Session = Depends(get_db),
     auth_details: dict = Depends(auth_middleware),
 ):
@@ -228,7 +231,7 @@ def favorite_song(
     fav_song = (
         db.query(Favorite)
         .filter(
-            Favorite.song_id == song.song_id,
+            Favorite.song_id == payload.song_id,
             Favorite.user_id == user_id,
         )
         .first()
@@ -241,7 +244,7 @@ def favorite_song(
     else:
         new_fav = Favorite(
             id=str(uuid.uuid4()),
-            song_id=song.song_id,
+            song_id=payload.song_id,
             user_id=user_id,
         )
         db.add(new_fav)

@@ -5,14 +5,14 @@ import 'package:client/features/home/song/model/song_artist_model.dart';
 
 extension SongArtistFormatter on SongModel {
   String get formattedArtists {
-    if (artists.isEmpty) {
+    if (this.artists.isEmpty) {
       return 'Unknown artist';
     }
 
     final primaryLinks =
-        artists.where((link) => link.role == SongArtistRole.primary).toList();
+        this.artists.where((link) => link.role == SongArtistRole.primary).toList();
 
-    final linksToUse = primaryLinks.isNotEmpty ? primaryLinks : artists;
+    final linksToUse = primaryLinks.isNotEmpty ? primaryLinks : this.artists;
 
     final names = linksToUse
         .map((link) => link.artist.name.trim())

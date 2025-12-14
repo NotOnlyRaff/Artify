@@ -1,3 +1,4 @@
+import 'package:client/core/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 
 // SONG
@@ -93,13 +94,24 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       child: _query.trim().isEmpty
                           ? SearchExploreSection(
                               songs: songs,
-                              // se vuoi in futuro puoi estendere Explore per usare artists/albums
+                              onSongTap: (song) {
+                                // Quando una canzone è tappata, la aggiorniamo
+                                ref
+                                    .read(currentSongNotifierProvider.notifier)
+                                    .updateSong(song);
+                              },
                             )
                           : SearchResultsSection(
                               songs: songs,
                               artists: artists,
                               albums: albums,
                               query: _query,
+                              onSongTap: (song) {
+                                // Quando una canzone è tappata, la aggiorniamo
+                                ref
+                                    .read(currentSongNotifierProvider.notifier)
+                                    .updateSong(song);
+                              },
                             ),
                     );
                   },

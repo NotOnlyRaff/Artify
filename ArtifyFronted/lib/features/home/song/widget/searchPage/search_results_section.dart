@@ -10,6 +10,7 @@ class SearchResultsSection extends StatelessWidget {
   final List<ArtistModel> artists;
   final List<AlbumModel> albums;
   final String query;
+  final Function(SongModel) onSongTap;
 
   const SearchResultsSection({
     super.key,
@@ -17,6 +18,7 @@ class SearchResultsSection extends StatelessWidget {
     required this.artists,
     required this.albums,
     required this.query,
+    required this.onSongTap,
   });
 
   @override
@@ -71,7 +73,8 @@ class SearchResultsSection extends StatelessWidget {
         if (songMatches.isNotEmpty) ...[
           const _SectionTitle('Songs'),
           const SizedBox(height: 8),
-          ...songMatches.map((s) => _SongResultTile(song: s)),
+          ...songMatches
+              .map((s) => _SongResultTile(song: s, onSongTap: onSongTap)),
           const SizedBox(height: 24),
         ],
         if (artistMatches.isNotEmpty) ...[
@@ -111,8 +114,9 @@ class _SectionTitle extends StatelessWidget {
 /// SONG TILE -----------------------------------------------------------------
 class _SongResultTile extends StatelessWidget {
   final SongModel song;
+  final Function(SongModel) onSongTap;
 
-  const _SongResultTile({required this.song});
+  const _SongResultTile({required this.song, required this.onSongTap});
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +189,7 @@ class _SongResultTile extends StatelessWidget {
           color: Colors.white70,
         ),
         onTap: () {
-          // TODO: apri player / dettaglio canzone
+          onSongTap(song);
         },
       ),
     );

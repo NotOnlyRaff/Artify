@@ -63,6 +63,18 @@ Future<ArtistModel> getArtist(
   };
 }
 
+Future<ArtistModel> fetchArtistById(GetArtistRef ref, String artistId) async {
+  final token =
+      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
+
+  final repo = ref.watch(artistRemoteRepositoryProvider);
+  final res = await repo.fetchArtistById(artistId: artistId, token: token);
+  return switch (res) {
+    Left(value: final l) => throw l.message,
+    Right(value: final r) => r,
+  };
+}
+
 /// ───────────────── VIEWMODEL: OPERAZIONI MUTABILI ───────────
 ///
 /// Per create / update / delete + gestione "recent artists".

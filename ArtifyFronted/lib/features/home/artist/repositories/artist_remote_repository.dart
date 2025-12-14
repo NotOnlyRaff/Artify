@@ -263,6 +263,44 @@ class ArtistRemoteRepository {
     }
   }
 
+  Future<Either<AppFailure, ArtistModel>> fetchArtistById({
+    required String artistId,
+    required String token,
+  }) async {
+    try {
+      final uri = _uri('/artist/$artistId');
+
+      final res = await http.get(
+        uri,
+        headers: _jsonHeaders(token),
+      );
+
+      print(res.body);
+
+      dynamic resBodyMap = jsonDecode(res.body);
+
+      if (res.statusCode != 200) {
+        if (resBodyMap is Map<String, dynamic>) {
+          throw Exception(
+            resBodyMap['detail']?.toString() ?? 'Get artist failed',
+          );
+        }
+        throw Exception('Get artist failed (${res.statusCode})');
+      }
+
+      if (resBodyMap is! Map<String, dynamic>) {
+        return Left(AppFailure('Invalid response format for ArtistOut'));
+      }
+
+      final artist = ArtistModel.fromMap(
+        Map<String, dynamic>.from(resBodyMap),
+      );
+
+      return Right(artist);
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
+  }
   // ───────────────── UPDATE ARTIST ─────────────────
   //
   // PATCH /artist/{artist_id}

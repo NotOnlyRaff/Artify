@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:flutter/foundation.dart';
@@ -63,22 +62,8 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       _audioPlayer.dispose();
     });
 
-    // Nessun brano selezionato all’inizio
+    // Nessun brano selezionato all’inizios
     return null;
-  }
-
-  /// Cerca un nome artista decente (se ti serve lato debugging)
-  String? _getDisplayArtist(SongModel song) {
-    if (song.artists.isEmpty) return null;
-
-    final primary = song.artists.where(
-      (link) => link.role == SongArtistRole.primary,
-    );
-
-    final SongArtistModel chosen =
-        primary.isNotEmpty ? primary.first : song.artists.first;
-
-    return chosen.artistName;
   }
 
   Future<void> updateSong(SongModel song) async {
@@ -101,12 +86,14 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       await _audioPlayer.stop();
       debugPrint('[CurrentSongNotifier] audioPlayer.stop() done');
 
-      final artistName = _getDisplayArtist(song);
+      final artistName = song.artists.isNotEmpty
+          ? song.artists.first.artistName // Passa l'artista corretto
+          : 'Unknown artist';
 
       final mediaItem = MediaItem(
         id: song.id,
         title: song.songName,
-        artist: artistName,
+        artist: artistName, // Assicurati di passare l'artista
         artUri:
             song.thumbnailUrl != null ? Uri.parse(song.thumbnailUrl!) : null,
         duration: song.durationSeconds != null

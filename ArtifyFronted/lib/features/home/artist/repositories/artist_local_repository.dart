@@ -14,10 +14,6 @@ ArtistLocalRepository artistLocalRepository(ArtistLocalRepositoryRef ref) {
 class ArtistLocalRepository {
   static const String _boxName = 'recent_artists';
 
-  /// Box Hive per gli artisti recenti.
-  /// NB: va aperta nel main prima di usare questo repo.
-  Box<dynamic> get _box => Hive.box<dynamic>(_boxName);
-
   Box _getBox() {
     if (!Hive.isBoxOpen(_boxName)) {
       throw HiveError('Box $_boxName is not open. Call Hive.openBox first.');

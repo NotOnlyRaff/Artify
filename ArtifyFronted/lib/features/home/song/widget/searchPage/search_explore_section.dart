@@ -5,10 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 class SearchExploreSection extends StatelessWidget {
   final List<SongModel> songs;
+  final Function(SongModel) onSongTap;
 
   const SearchExploreSection({
     super.key,
     required this.songs,
+    required this.onSongTap,
   });
 
   @override
@@ -123,7 +125,7 @@ class SearchExploreSection extends StatelessWidget {
                 child: SearchSongTile(
                   song: s,
                   onTap: () {
-                    // TODO: integra col player
+                    onSongTap(s);
                   },
                 ),
               ),

@@ -325,7 +325,7 @@ class AdminPage extends ConsumerWidget {
 
   Widget _buildSongTile(BuildContext context, SongModel song) {
     final artist = song.artists.isNotEmpty
-        ? song.artists.map((a) => a.artist.name).join(', ')
+        ? song.artists.map((a) => a.artistName).join(', ')
         : 'Unknown Artist';
 
     return Container(

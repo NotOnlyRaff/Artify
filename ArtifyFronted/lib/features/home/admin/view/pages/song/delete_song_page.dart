@@ -208,7 +208,7 @@ class _DeleteSongPageState extends ConsumerState<DeleteSongPage> {
                     ),
                     subtitle: Text(
                       song.artists.isNotEmpty
-                          ? song.artists.map((a) => a.artist.name).join(', ')
+                          ? song.artists.map((a) => a.artistName).join(', ')
                           : 'Unknown Artist',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

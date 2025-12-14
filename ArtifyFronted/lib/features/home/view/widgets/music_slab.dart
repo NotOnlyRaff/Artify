@@ -3,9 +3,11 @@ import 'dart:ui';
 import 'package:client/core/providers/current_song_notifier.dart';
 import 'package:client/core/providers/current_user_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
-import 'package:client/features/home/song/model/song_artist_model.dart';
-import 'package:client/features/home/view/widgets/music_player.dart';
+import 'package:client/features/home/models/fav_song_model.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
+import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
+import 'package:client/features/home/view/widgets/music_player.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,8 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class MusicSlab extends ConsumerWidget {
   const MusicSlab({super.key});
 
-  /// Nome artista principale o, se mancante, il primo artista disponibile
-  String _primaryArtistName(song) {
+  String _primaryArtistName(SongModel song) {
     if (song.artists.isEmpty) return 'Unknown artist';
 
     final primary = song.artists
@@ -22,31 +23,40 @@ class MusicSlab extends ConsumerWidget {
         .toList();
 
     final artistLink = primary.isNotEmpty ? primary.first : song.artists.first;
-    return artistLink.artist.name ?? 'Unknown artist';
+
+    // se hai solo artistName usa quello, altrimenti prova artist.name
+    return artistLink.artistName ?? artistLink.artistName ?? 'Unknown artist';
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentSong = ref.watch(currentSongNotifierProvider);
     final songNotifier = ref.read(currentSongNotifierProvider.notifier);
+
     final userFavorites = ref.watch(
       currentUserNotifierProvider.select(
-        (u) => u?.favorites ?? const [],
+        (u) => u?.favorites ?? const <FavSongModel>[],
       ),
     );
 
+    debugPrint(
+      '[MusicSlab] build – currentSong: ${currentSong?.id ?? "null"} / '
+      '${currentSong?.songName ?? "-"}',
+    );
+
     if (currentSong == null) {
+      debugPrint('[MusicSlab] no currentSong -> returning SizedBox.shrink');
       return const SizedBox.shrink();
     }
 
-    final isFav = userFavorites
-        .any((fav) => fav.song_id == currentSong.id); // stesso check di prima
+    final isFav = userFavorites.any((fav) => fav == currentSong.id);
 
     final size = MediaQuery.of(context).size;
     final slabWidth = size.width - 16;
 
     return GestureDetector(
       onTap: () {
+        debugPrint('[MusicSlab] onTap -> open MusicPlayer');
         Navigator.of(context).push(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) {
@@ -72,7 +82,7 @@ class MusicSlab extends ConsumerWidget {
           borderRadius: BorderRadius.circular(18),
           child: Stack(
             children: [
-              // 🔹 Sfondo glassmorphism
+              // Sfondo glassmorphism
               BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
@@ -94,7 +104,7 @@ class MusicSlab extends ConsumerWidget {
                 ),
               ),
 
-              // 🔹 Contenuto (cover + titolo + controlli)
+              // Contenuto
               Container(
                 height: 72,
                 width: slabWidth,
@@ -136,13 +146,12 @@ class MusicSlab extends ConsumerWidget {
                     ),
                     const SizedBox(width: 10),
 
-                    // Titolo + Artista
+                    // Titolo + artista
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Titolo brano
                           Text(
                             currentSong.songName,
                             maxLines: 1,
@@ -154,7 +163,6 @@ class MusicSlab extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          // Artista principale
                           Text(
                             _primaryArtistName(currentSong),
                             maxLines: 1,
@@ -171,7 +179,7 @@ class MusicSlab extends ConsumerWidget {
 
                     const SizedBox(width: 6),
 
-                    // Azioni: cuore + play/pause
+                    // Azioni
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -184,6 +192,9 @@ class MusicSlab extends ConsumerWidget {
                             size: 20,
                           ),
                           onPressed: () async {
+                            debugPrint(
+                              '[MusicSlab] fav tap – songId=${currentSong.id}',
+                            );
                             await ref
                                 .read(songViewModelProvider.notifier)
                                 .favSong(songId: currentSong.id);
@@ -213,7 +224,10 @@ class MusicSlab extends ConsumerWidget {
                               color: Colors.white,
                               size: 18,
                             ),
-                            onPressed: songNotifier.playPause,
+                            onPressed: () async {
+                              debugPrint('[MusicSlab] playPause tap');
+                              await songNotifier.playPause();
+                            },
                           ),
                         ),
                       ],
@@ -222,7 +236,7 @@ class MusicSlab extends ConsumerWidget {
                 ),
               ),
 
-              // 🔹 Barra di progresso (background)
+              // Barra di progresso (background)
               Positioned(
                 bottom: 0,
                 left: 10,
@@ -236,7 +250,7 @@ class MusicSlab extends ConsumerWidget {
                 ),
               ),
 
-              // 🔹 Barra di progresso (foreground)
+              // Barra di progresso (foreground)
               Positioned(
                 bottom: 0,
                 left: 10,
@@ -252,8 +266,8 @@ class MusicSlab extends ConsumerWidget {
                       return const SizedBox.shrink();
                     }
 
-                    final ratio = position.inMilliseconds /
-                        duration.inMilliseconds.clamp(1, double.infinity);
+                    final ratio =
+                        position.inMilliseconds / duration.inMilliseconds;
                     final clamped = ratio.clamp(0.0, 1.0).toDouble();
 
                     return Container(

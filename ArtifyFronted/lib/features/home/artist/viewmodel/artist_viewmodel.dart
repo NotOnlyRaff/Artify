@@ -28,7 +28,6 @@ Future<List<ArtistModel>> getArtists(
 
   final res = await repo.listArtists(
     token: token,
-    search: search,
     songId: songId,
     albumId: albumId,
   );
@@ -194,9 +193,12 @@ class ArtistViewModel extends _$ArtistViewModel {
 
       case Right(value: final ok):
         if (ok) {
-          // tolgo dai recenti
-          await _localRepo.removeFromRecentlyOpened(artistId);
-          // invalido lista + dettaglio
+          try {
+            await _localRepo.removeFromRecentlyOpened(artistId);
+          } catch (_) {
+            // Se Hive non è inizializzato, non deve bloccare la delete lato UI.
+          }
+
           ref.invalidate(getArtistsProvider);
           ref.invalidate(getArtistProvider(artistId));
         }

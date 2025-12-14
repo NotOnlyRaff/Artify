@@ -3,7 +3,9 @@ import 'dart:ui';
 import 'package:client/core/providers/current_song_notifier.dart';
 import 'package:client/core/providers/current_user_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
-import 'package:client/features/home/song/model/song_artist_model.dart';
+import 'package:client/features/home/models/fav_song_model.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
+import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -12,15 +14,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class MusicPlayer extends ConsumerWidget {
   const MusicPlayer({super.key});
 
-  String _primaryArtistName(song) {
+  /// Prova a trovare un nome artista decente, senza mai lanciare eccezioni.
+  String _primaryArtistName(SongModel song) {
     if (song.artists.isEmpty) return 'Unknown artist';
 
-    final primary = song.artists
-        .where((link) => link.role == SongArtistRole.primary)
-        .toList();
+    try {
+      final primary = song.artists
+          .where((link) => link.role == SongArtistRole.primary)
+          .toList();
 
-    final artistLink = primary.isNotEmpty ? primary.first : song.artists.first;
-    return artistLink.artist.name;
+      final dynamic chosen =
+          primary.isNotEmpty ? primary.first : song.artists.first;
+
+      dynamic candidate;
+
+      // Caso 1: SongArtistModel ha un campo `artistName`
+      try {
+        candidate = chosen.artistName;
+      } catch (_) {
+        // ignore
+      }
+
+      // Caso 2: SongArtistModel ha un campo `artist` con dentro ArtistModel
+      if (candidate == null) {
+        try {
+          candidate = chosen.artist?.name;
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        return candidate;
+      }
+    } catch (e, st) {
+      debugPrint('[MusicPlayer] _primaryArtistName error: $e\n$st');
+    }
+
+    return 'Unknown artist';
   }
 
   String _formatDuration(Duration? d) {
@@ -34,15 +65,23 @@ class MusicPlayer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentSong = ref.watch(currentSongNotifierProvider);
+    debugPrint(
+      '[MusicPlayer] build – currentSong: '
+      '${currentSong?.id ?? 'null'} / ${currentSong?.songName ?? '-'}',
+    );
+
     final songNotifier = ref.read(currentSongNotifierProvider.notifier);
+    final player = songNotifier.audioPlayer;
+
     final userFavorites = ref.watch(
       currentUserNotifierProvider.select(
-        (u) => u?.favorites ?? const [],
+        (u) => u?.favorites ?? const <FavSongModel>[],
       ),
     );
 
     // Se per qualche motivo non c'è un brano selezionato
     if (currentSong == null) {
+      debugPrint('[MusicPlayer] no currentSong – showing empty state');
       return const Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
@@ -59,9 +98,9 @@ class MusicPlayer extends ConsumerWidget {
       );
     }
 
-    final isFav = userFavorites.any((fav) => fav.song_id == currentSong.id);
+    final isFav = userFavorites.any((fav) => fav == currentSong.id);
     final artistName = _primaryArtistName(currentSong);
-    final player = songNotifier.audioPlayer;
+    final size = MediaQuery.of(context).size;
 
     return Container(
       decoration: const BoxDecoration(
@@ -86,7 +125,10 @@ class MusicPlayer extends ConsumerWidget {
                 child: Row(
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        debugPrint('[MusicPlayer] close pressed – popping');
+                        Navigator.pop(context);
+                      },
                       icon: const Icon(
                         CupertinoIcons.chevron_down,
                         color: Colors.white,
@@ -105,6 +147,7 @@ class MusicPlayer extends ConsumerWidget {
                     IconButton(
                       onPressed: () {
                         // futuro: queue, cast, ecc.
+                        debugPrint('[MusicPlayer] options pressed');
                       },
                       icon: const Icon(
                         CupertinoIcons.ellipsis,
@@ -115,59 +158,71 @@ class MusicPlayer extends ConsumerWidget {
                 ),
               ),
 
-              // 🔹 ARWORK
+              // 🔹 Artwork (dimensione migliorata)
               Expanded(
                 flex: 5,
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  child: Hero(
-                    tag: 'music-image',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          currentSong.thumbnailUrl != null
-                              ? Image.network(
-                                  currentSong.thumbnailUrl!,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Color(0xFF811F1A),
-                                        Color(0xFF4B39EF),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        // max 80% della larghezza o 420px
+                        maxWidth: size.width * 0.8,
+                        maxHeight: size.height * 0.45,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: 1, // artwork quadrato
+                        child: Hero(
+                          tag: 'music-image',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                currentSong.thumbnailUrl != null
+                                    ? Image.network(
+                                        currentSong.thumbnailUrl!,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Color(0xFF811F1A),
+                                              Color(0xFF4B39EF),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.music_note_rounded,
+                                          color: Colors.white,
+                                          size: 72,
+                                        ),
+                                      ),
+                                // Overlay per leggibilità
+                                Align(
+                                  alignment: Alignment.bottomCenter,
+                                  child: Container(
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.bottomCenter,
+                                        end: Alignment.topCenter,
+                                        colors: [
+                                          Colors.black.withOpacity(0.45),
+                                          Colors.transparent,
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  child: const Icon(
-                                    Icons.music_note_rounded,
-                                    color: Colors.white,
-                                    size: 72,
-                                  ),
                                 ),
-                          // leggero overlay per rendere il testo più leggibile se un giorno lo metti sopra
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              height: 60,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [
-                                    Colors.black.withOpacity(0.45),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -187,8 +242,7 @@ class MusicPlayer extends ConsumerWidget {
                     physics: const BouncingScrollPhysics(),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize:
-                          MainAxisSize.min, // non obbligatorio ma pulito
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // Titolo + artista + cuore
                         Row(
@@ -224,6 +278,10 @@ class MusicPlayer extends ConsumerWidget {
                             ),
                             IconButton(
                               onPressed: () async {
+                                debugPrint(
+                                  '[MusicPlayer] fav tapped – '
+                                  'songId=${currentSong.id}, wasFav=$isFav',
+                                );
                                 await ref
                                     .read(songViewModelProvider.notifier)
                                     .favSong(songId: currentSong.id);
@@ -256,7 +314,7 @@ class MusicPlayer extends ConsumerWidget {
                               sliderValue = (position.inMilliseconds /
                                       duration.inMilliseconds)
                                   .clamp(0.0, 1.0)
-                                  .toDouble(); // piccolo hardening
+                                  .toDouble();
                               canSeek = true;
                             }
 
@@ -276,8 +334,17 @@ class MusicPlayer extends ConsumerWidget {
                                     min: 0,
                                     max: 1,
                                     onChanged: canSeek ? (_) {} : null,
-                                    onChangeEnd:
-                                        canSeek ? songNotifier.seek : null,
+                                    onChangeEnd: canSeek
+                                        ? (val) {
+                                            debugPrint(
+                                              '[MusicPlayer] seek – '
+                                              'value=$val '
+                                              '(position=${position.inMilliseconds}ms, '
+                                              'duration=${duration?.inMilliseconds}ms)',
+                                            );
+                                            songNotifier.seek(val);
+                                          }
+                                        : null,
                                   ),
                                 ),
                                 Row(
@@ -330,7 +397,8 @@ class MusicPlayer extends ConsumerWidget {
                               children: [
                                 IconButton(
                                   onPressed: () {
-                                    // TODO: shuffle logic
+                                    debugPrint(
+                                        '[MusicPlayer] shuffle pressed (TODO)');
                                   },
                                   icon: const Icon(
                                     CupertinoIcons.shuffle,
@@ -341,7 +409,8 @@ class MusicPlayer extends ConsumerWidget {
                                 const SizedBox(width: 8),
                                 IconButton(
                                   onPressed: () {
-                                    // TODO: previous track
+                                    debugPrint(
+                                        '[MusicPlayer] previous track (TODO)');
                                   },
                                   icon: const Icon(
                                     CupertinoIcons.backward_end_alt_fill,
@@ -365,7 +434,17 @@ class MusicPlayer extends ConsumerWidget {
                                     ),
                                   ),
                                   child: IconButton(
-                                    onPressed: songNotifier.playPause,
+                                    onPressed: () async {
+                                      debugPrint(
+                                        '[MusicPlayer] playPause tapped – '
+                                        'isPlaying(before)=${songNotifier.isPlaying}',
+                                      );
+                                      await songNotifier.playPause();
+                                      debugPrint(
+                                        '[MusicPlayer] playPause finished – '
+                                        'isPlaying(after)=${songNotifier.isPlaying}',
+                                      );
+                                    },
                                     iconSize: 40,
                                     icon: Icon(
                                       songNotifier.isPlaying
@@ -378,7 +457,8 @@ class MusicPlayer extends ConsumerWidget {
                                 const SizedBox(width: 8),
                                 IconButton(
                                   onPressed: () {
-                                    // TODO: next track
+                                    debugPrint(
+                                        '[MusicPlayer] next track (TODO)');
                                   },
                                   icon: const Icon(
                                     CupertinoIcons.forward_end_alt_fill,
@@ -389,7 +469,8 @@ class MusicPlayer extends ConsumerWidget {
                                 const SizedBox(width: 8),
                                 IconButton(
                                   onPressed: () {
-                                    // TODO: repeat logic
+                                    debugPrint(
+                                        '[MusicPlayer] repeat pressed (TODO)');
                                   },
                                   icon: const Icon(
                                     CupertinoIcons.repeat,
@@ -409,7 +490,8 @@ class MusicPlayer extends ConsumerWidget {
                           children: [
                             IconButton(
                               onPressed: () {
-                                // TODO: connect device / output
+                                debugPrint(
+                                    '[MusicPlayer] device icon pressed (TODO)');
                               },
                               icon: const Icon(
                                 CupertinoIcons.hifispeaker_fill,
@@ -427,7 +509,8 @@ class MusicPlayer extends ConsumerWidget {
                             const Spacer(),
                             IconButton(
                               onPressed: () {
-                                // TODO: open queue
+                                debugPrint(
+                                    '[MusicPlayer] queue icon pressed (TODO)');
                               },
                               icon: const Icon(
                                 CupertinoIcons.music_note_list,

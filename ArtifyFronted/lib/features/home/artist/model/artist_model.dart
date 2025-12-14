@@ -1,5 +1,7 @@
-import 'package:client/features/home/models/artist_album_model.dart';
-import 'package:client/features/home/models/fav_song_model.dart';
+// lib/features/home/artist/model/artist_model.dart
+
+import 'package:client/features/home/album/model/album_model.dart';
+import 'package:client/features/home/song/model/song_model.dart';
 import 'package:flutter/foundation.dart';
 
 class ArtistModel {
@@ -11,9 +13,9 @@ class ArtistModel {
   final String? bio;
   final String? country;
 
-  // 🔹 nuovi campi allineati a ArtistOut
-  final List<FavSongModel> songs;
-  final List<ArtistAlbumModel> albums;
+  // 🔹 ora usiamo SongArtistModel, non più FavSongModel
+  final List<SongModel> songs;
+  final List<AlbumModel> albums;
 
   const ArtistModel({
     required this.id,
@@ -35,8 +37,8 @@ class ArtistModel {
     String? imageUrl,
     String? bio,
     String? country,
-    List<FavSongModel>? songs,
-    List<ArtistAlbumModel>? albums,
+    List<SongModel>? songs,
+    List<AlbumModel>? albums,
   }) {
     return ArtistModel(
       id: id ?? this.id,
@@ -53,21 +55,24 @@ class ArtistModel {
 
   factory ArtistModel.fromMap(Map<String, dynamic> map) {
     return ArtistModel(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      displayName: map['display_name'] as String?,
-      slug: map['slug'] as String?,
-      imageUrl: map['image_url'] as String?,
-      bio: map['bio'] as String?,
-      country: map['country'] as String?,
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? '',
+      displayName:
+          map['display_name'] is String ? map['display_name'] as String : null,
+      slug: map['slug'] is String ? map['slug'] as String : null,
+      imageUrl: map['image_url'] == null ? null : map['image_url'].toString(),
+      bio: map['bio'] is String ? map['bio'] as String : null,
+      country: map['country'] is String ? map['country'] as String : null,
       songs: (map['songs'] as List<dynamic>? ?? [])
           .map(
-            (e) => FavSongModel.fromMap(e as Map<String, dynamic>),
+            (e) => SongModel.fromMap(
+              Map<String, dynamic>.from(e as Map),
+            ),
           )
           .toList(),
       albums: (map['albums'] as List<dynamic>? ?? [])
           .map(
-            (e) => ArtistAlbumModel.fromMap(e as Map<String, dynamic>),
+            (e) => AlbumModel.fromMap(e as Map<String, dynamic>),
           )
           .toList(),
     );
@@ -79,17 +84,19 @@ class ArtistModel {
       name: json['name'] as String,
       displayName: json['display_name'] as String?,
       slug: json['slug'] as String?,
-      imageUrl: json['image_url'] as String?,
+      imageUrl: json['image_url'] == null
+          ? null
+          : json['image_url'].toString(), // 👈 idem qui
       bio: json['bio'] as String?,
       country: json['country'] as String?,
       songs: (json['songs'] as List<dynamic>? ?? [])
           .map(
-            (e) => FavSongModel.fromMap(e as Map<String, dynamic>),
+            (e) => SongModel.fromMap(e as Map<String, dynamic>),
           )
           .toList(),
       albums: (json['albums'] as List<dynamic>? ?? [])
           .map(
-            (e) => ArtistAlbumModel.fromMap(e as Map<String, dynamic>),
+            (e) => AlbumModel.fromMap(e as Map<String, dynamic>),
           )
           .toList(),
     );
@@ -104,7 +111,7 @@ class ArtistModel {
       'image_url': imageUrl,
       'bio': bio,
       'country': country,
-      'songs': songs.map((s) => s.toMap()).toList(),
+      'songs': songs.map((s) => s.toJson()).toList(),
       'albums': albums.map((a) => a.toJson()).toList(),
     };
   }

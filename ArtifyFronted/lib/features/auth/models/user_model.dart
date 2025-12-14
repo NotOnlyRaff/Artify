@@ -1,31 +1,33 @@
+// lib/features/auth/models/user_model.dart (o percorso reale)
+
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-
-import 'package:client/features/home/models/fav_song_model.dart';
 
 class UserModel {
   final String name;
   final String email;
   final String id;
   final String token;
-  final List<FavSongModel> favorites;
+
+  /// lista di ID delle canzoni preferite (song.id)
+  final List<String> favorites;
 
   UserModel({
     required this.name,
     required this.email,
     required this.id,
     required this.token,
-    required this.favorites,
-  });
+    List<String>? favorites,
+  }) : favorites = favorites ?? const [];
 
   UserModel copyWith({
     String? name,
     String? email,
     String? id,
     String? token,
-    List<FavSongModel>? favorites,
+    List<String>? favorites,
   }) {
     return UserModel(
       name: name ?? this.name,
@@ -42,24 +44,51 @@ class UserModel {
       'email': email,
       'id': id,
       'token': token,
-      // quando rimandi verso il backend, se ti serve,
-      // ti conviene usare la stessa chiave del backend:
-      'favorite_songs': favorites.map((x) => x.toMap()).toList(),
+      // li rimandiamo come lista di id (se mai servirà)
+      'favorite_songs': favorites,
     };
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    // backend: favorite_songs: List[SongRef]
+    // SongRef: { id, song_name, thumbnail_url }
+    final rawFavs = map['favorite_songs'];
+
+    List<String> favoriteIds = [];
+    if (rawFavs is List) {
+      favoriteIds = rawFavs
+          .map((item) {
+            if (item == null) return null;
+
+            if (item is String) {
+              // nel caso in futuro decidessi di mandare solo ID
+              return item;
+            }
+
+            if (item is Map<String, dynamic>) {
+              final id = item['id'] ?? item['song_id'];
+              if (id == null) return null;
+              return id.toString();
+            }
+
+            if (item is Map) {
+              final id = (item['id'] ?? item['song_id'])?.toString();
+              return id;
+            }
+
+            return null;
+          })
+          .whereType<String>() // filtra solo gli id non null
+          .toList();
+    }
+
     return UserModel(
-      name: map['name'] ?? '',
-      email: map['email'] ?? '',
-      id: map['id'] ?? '',
-      // signup e /auth/ non mandano token → resta '' e poi lo setti con copyWith
-      token: map['token'] ?? '',
-      favorites: List<FavSongModel>.from(
-        (map['favorite_songs'] as List<dynamic>? ?? []).map(
-          (x) => FavSongModel.fromMap(x as Map<String, dynamic>),
-        ),
-      ),
+      name: map['name']?.toString() ?? '',
+      email: map['email']?.toString() ?? '',
+      id: map['id']?.toString() ?? '',
+      // signup e /auth/current non mandano token → lo metti dopo con copyWith
+      token: map['token']?.toString() ?? '',
+      favorites: favoriteIds,
     );
   }
 

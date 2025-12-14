@@ -1,5 +1,7 @@
 // lib/features/home/models/album_model.dart
 
+import 'package:client/features/home/models/album_artist_model.dart';
+
 class AlbumModel {
   final String id;
   final String title;
@@ -9,6 +11,8 @@ class AlbumModel {
   final int? totalTracks;
   final String? albumType; // 'album', 'single', 'ep', ecc.
 
+  final List<AlbumArtistModel> artists;
+
   const AlbumModel({
     required this.id,
     required this.title,
@@ -17,6 +21,7 @@ class AlbumModel {
     this.label,
     this.totalTracks,
     this.albumType,
+    this.artists = const [],
   });
 
   AlbumModel copyWith({
@@ -36,34 +41,61 @@ class AlbumModel {
       label: label ?? this.label,
       totalTracks: totalTracks ?? this.totalTracks,
       albumType: albumType ?? this.albumType,
+      artists: artists,
     );
   }
 
   factory AlbumModel.fromMap(Map<String, dynamic> map) {
     return AlbumModel(
-      id: map['id'] as String,
-      title: map['title'] as String,
-      coverUrl: map['cover_url'] as String?,
+      id: map['id']?.toString() ?? '',
+      title: map['title']?.toString() ?? '',
+      coverUrl: map['cover_url'] == null ? null : map['cover_url'].toString(),
       releaseDate: map['release_date'] != null
-          ? DateTime.parse(map['release_date'] as String)
+          ? DateTime.parse(map['release_date'].toString())
           : null,
-      label: map['label'] as String?,
-      totalTracks: map['total_tracks'] as int?,
-      albumType: map['album_type'] as String?,
+      label: map['label'] == null ? null : map['label'].toString(),
+      totalTracks: (() {
+        final raw = map['total_tracks'];
+        if (raw is int) return raw;
+        if (raw is String) return int.tryParse(raw);
+        return null;
+      })(),
+      albumType:
+          map['album_type'] == null ? null : map['album_type'].toString(),
+      artists: (map['artists'] as List<dynamic>? ?? [])
+          .map(
+            (e) => AlbumArtistModel.fromMap(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
+          .toList(),
     );
   }
 
   factory AlbumModel.fromJson(Map<String, dynamic> json) {
     return AlbumModel(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      coverUrl: json['cover_url'] as String?,
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      coverUrl: json['cover_url'] == null ? null : json['cover_url'].toString(),
       releaseDate: json['release_date'] != null
-          ? DateTime.parse(json['release_date'] as String)
+          ? DateTime.parse(json['release_date'].toString())
           : null,
-      label: json['label'] as String?,
-      totalTracks: json['total_tracks'] as int?,
-      albumType: json['album_type'] as String?,
+      label: json['label'] == null ? null : json['label'].toString(),
+      totalTracks: (() {
+        final raw = json['total_tracks'];
+        if (raw is int) return raw;
+        if (raw is String) return int.tryParse(raw);
+        return null;
+      })(),
+      albumType:
+          json['album_type'] == null ? null : json['album_type'].toString(),
+      artists: (json['artists'] as List<dynamic>? ?? [])
+          .map(
+            (e) => AlbumArtistModel.fromMap(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -76,12 +108,13 @@ class AlbumModel {
       'label': label,
       'total_tracks': totalTracks,
       'album_type': albumType,
+      'artists': artists.map((a) => a.toMap()).toList(),
     };
   }
 
   @override
   String toString() {
-    return 'AlbumModel(id: $id, title: $title, coverUrl: $coverUrl, releaseDate: $releaseDate, label: $label, totalTracks: $totalTracks, albumType: $albumType)';
+    return 'AlbumModel(id: $id, title: $title, coverUrl: $coverUrl, releaseDate: $releaseDate, label: $label, totalTracks: $totalTracks, albumType: $albumType, artists: $artists)';
   }
 
   @override

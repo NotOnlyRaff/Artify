@@ -135,7 +135,7 @@ class ArtistRemoteRepository {
         return Left(AppFailure('Invalid response format for ArtistOut'));
       }
 
-      final artist = ArtistModel.fromMap(
+      final artist = ArtistModel.fromJson(
         Map<String, dynamic>.from(resBodyMap),
       );
       return Right(artist);
@@ -147,8 +147,7 @@ class ArtistRemoteRepository {
   // ───────────────── LIST ARTISTS ──────────────────
 
   Future<Either<AppFailure, List<ArtistModel>>> listArtists({
-    required String token,
-    String? search,   // ignorati ora
+    required String token, // ignorati ora
     String? songId,
     String? albumId,
   }) async {
@@ -160,6 +159,8 @@ class ArtistRemoteRepository {
         uri,
         headers: _jsonHeaders(token),
       );
+
+      print(res.body);
 
       dynamic resBodyMap = jsonDecode(res.body);
 
@@ -195,8 +196,7 @@ class ArtistRemoteRepository {
     }
   }
 
-
-    // ───────────────── SEARCH ARTISTS ──────────────────
+  // ───────────────── SEARCH ARTISTS ──────────────────
   //
   // GET /artist/search?q=...&song_id=...&album_id=...
 
@@ -262,7 +262,6 @@ class ArtistRemoteRepository {
       return Left(AppFailure(e.toString()));
     }
   }
-
 
   // ───────────────── UPDATE ARTIST ─────────────────
   //

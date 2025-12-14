@@ -60,7 +60,7 @@ class LibraryPage extends ConsumerWidget {
                   ),
                   subtitle: Text(
                     song.artists.isNotEmpty
-                        ? song.artists.map((a) => a.artist.name).join(', ')
+                        ? song.artists.map((a) => a.artistName).join(', ')
                         : 'Unknown Artist',
                     style: const TextStyle(
                       fontSize: 13,

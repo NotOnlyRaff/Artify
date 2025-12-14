@@ -1,18 +1,23 @@
+import 'dart:async';
+
+import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
-import 'package:client/features/home/song/model/song_artist_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'current_song_notifier.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class CurrentSongNotifier extends _$CurrentSongNotifier {
   late final SongLocalRepository _songLocalRepository;
   late final AudioPlayer _audioPlayer;
 
-  /// Stato di play/pause
+  StreamSubscription<PlayerState>? _playerStateSub;
+
+  /// Stato di play/pause (derivato dal player)
   bool isPlaying = false;
 
   AudioPlayer get audioPlayer => _audioPlayer;
@@ -22,8 +27,39 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     _songLocalRepository = ref.watch(songLocalRepositoryProvider);
     _audioPlayer = AudioPlayer();
 
-    // Quando il provider viene eliminato, distruggiamo il player
+    debugPrint('[CurrentSongNotifier] build() – initial state = null');
+
+    // Listener UNICO sullo stato del player
+    _playerStateSub = _audioPlayer.playerStateStream.listen((playerState) {
+      final processing = playerState.processingState;
+      final playing = playerState.playing;
+
+      debugPrint(
+        '[CurrentSongNotifier] playerStateStream -> '
+        'processing=$processing, playing=$playing',
+      );
+
+      // "playing" vero solo se è pronto e in riproduzione
+      isPlaying = playing && processing == ProcessingState.ready;
+
+      // Se la traccia è finita, riportiamo a inizio e mettiamo in pausa
+      if (processing == ProcessingState.completed) {
+        debugPrint('[CurrentSongNotifier] track completed – resetting');
+        _audioPlayer.seek(Duration.zero);
+        _audioPlayer.pause();
+        isPlaying = false;
+      }
+
+      // Se c'è una song selezionata notifichiamo la UI
+      if (state != null) {
+        state = state!.copyWith(); // trigger rebuild
+      }
+    });
+
     ref.onDispose(() {
+      debugPrint(
+          '[CurrentSongNotifier] onDispose – cancelling stream + dispose');
+      _playerStateSub?.cancel();
       _audioPlayer.dispose();
     });
 
@@ -31,9 +67,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     return null;
   }
 
-  /// Prende il nome dell'artista da mostrare:
-  /// - se c'è un PRIMARY -> quello
-  /// - altrimenti il primo della lista
+  /// Cerca un nome artista decente (se ti serve lato debugging)
   String? _getDisplayArtist(SongModel song) {
     if (song.artists.isEmpty) return null;
 
@@ -44,73 +78,131 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     final SongArtistModel chosen =
         primary.isNotEmpty ? primary.first : song.artists.first;
 
-    return chosen.artist.name;
+    return chosen.artistName;
   }
 
   Future<void> updateSong(SongModel song) async {
-    // Stop del brano precedente
-    await _audioPlayer.stop();
-
-    final artistName = _getDisplayArtist(song);
-
-    final mediaItem = MediaItem(
-      id: song.id,
-      title: song.songName,
-      artist: artistName,
-      artUri: song.thumbnailUrl != null ? Uri.parse(song.thumbnailUrl!) : null,
-      duration: song.durationSeconds != null
-          ? Duration(seconds: song.durationSeconds!)
-          : null,
+    debugPrint(
+      '[CurrentSongNotifier] updateSong() called for ${song.id} – ${song.songName}',
+    );
+    debugPrint(
+      '[CurrentSongNotifier] BEFORE – isPlaying=$isPlaying, state=${state?.id}',
     );
 
-    final audioSource = AudioSource.uri(
-      Uri.parse(song.songUrl),
-      tag: mediaItem,
-    );
-
-    await _audioPlayer.setAudioSource(audioSource);
-
-    // Listener di fine traccia
-    _audioPlayer.playerStateStream.listen((playerState) {
-      if (playerState.processingState == ProcessingState.completed) {
-        _audioPlayer.seek(Duration.zero);
-        _audioPlayer.pause();
-        isPlaying = false;
-
-        // copia “identica” giusto per triggherare la UI
-        state = state?.copyWith();
-      }
-    });
-
-    // Salva tra i "recently played"
-    await _songLocalRepository.saveRecentlyPlayed(song);
-
-    await _audioPlayer.play();
-    isPlaying = true;
+    // 🔹 1) Aggiorna SUBITO lo stato, così lo slab e il player vedono la canzone
     state = song;
+    isPlaying = false;
+    debugPrint(
+      '[CurrentSongNotifier] state updated immediately -> ${state?.id}',
+    );
+
+    try {
+      // 🔹 2) Ferma il brano precedente
+      await _audioPlayer.stop();
+      debugPrint('[CurrentSongNotifier] audioPlayer.stop() done');
+
+      final artistName = _getDisplayArtist(song);
+
+      final mediaItem = MediaItem(
+        id: song.id,
+        title: song.songName,
+        artist: artistName,
+        artUri:
+            song.thumbnailUrl != null ? Uri.parse(song.thumbnailUrl!) : null,
+        duration: song.durationSeconds != null
+            ? Duration(seconds: song.durationSeconds!)
+            : null,
+      );
+
+      final audioSource = AudioSource.uri(
+        Uri.parse(song.songUrl),
+        tag: mediaItem,
+      );
+
+      debugPrint(
+        '[CurrentSongNotifier] setAudioSource -> ${song.songUrl}',
+      );
+
+      // 🔹 3) Configura la sorgente audio
+      await _audioPlayer.setAudioSource(audioSource);
+      debugPrint('[CurrentSongNotifier] setAudioSource DONE');
+
+      // 🔹 4) Salva nei recently played (non blocca la UI)
+      unawaited(_songLocalRepository.saveRecentlyPlayed(song));
+      debugPrint('[CurrentSongNotifier] saved to recently played (async)');
+
+      // 🔹 5) Avvia riproduzione
+      await _audioPlayer.play();
+      debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
+
+      isPlaying = true;
+
+      // Notifica la UI (MusicSlab, MusicPlayer, ecc.)
+      state = state?.copyWith();
+
+      debugPrint(
+        '[CurrentSongNotifier] AFTER – isPlaying=$isPlaying, state=${state?.id}',
+      );
+    } catch (e, st) {
+      debugPrint(
+        '[CurrentSongNotifier] ERROR in updateSong: $e\n$st',
+      );
+      isPlaying = false;
+      // Notifica comunque per far “aggiornare” UI
+      if (state != null) {
+        state = state!.copyWith();
+      }
+    }
   }
 
   Future<void> playPause() async {
-    if (state == null) return; // nessuna song selezionata
+    debugPrint(
+      '[CurrentSongNotifier] playPause() – BEFORE isPlaying=$isPlaying, '
+      'state=${state?.id}',
+    );
 
-    if (isPlaying) {
-      await _audioPlayer.pause();
-    } else {
-      await _audioPlayer.play();
+    if (state == null) {
+      debugPrint(
+        '[CurrentSongNotifier] playPause() aborted – state is null (no song)',
+      );
+      return;
     }
 
-    isPlaying = !isPlaying;
-    // copia “identica” per notificare la UI
-    state = state?.copyWith();
+    try {
+      if (isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        await _audioPlayer.play();
+      }
+
+      isPlaying = !isPlaying;
+      state = state?.copyWith();
+
+      debugPrint(
+        '[CurrentSongNotifier] playPause() – AFTER isPlaying=$isPlaying',
+      );
+    } catch (e, st) {
+      debugPrint(
+        '[CurrentSongNotifier] ERROR in playPause: $e\n$st',
+      );
+    }
   }
 
   void seek(double val) {
-    if (_audioPlayer.duration == null) return;
+    final duration = _audioPlayer.duration;
+    if (duration == null) {
+      debugPrint('[CurrentSongNotifier] seek() – duration is null, abort');
+      return;
+    }
 
-    final total = _audioPlayer.duration!;
-    final target = Duration(
-      milliseconds: (val * total.inMilliseconds).toInt(),
+    final targetMs = (val * duration.inMilliseconds).toInt();
+    final target = Duration(milliseconds: targetMs);
+
+    debugPrint(
+      '[CurrentSongNotifier] seek() – val=$val -> $targetMs ms '
+      '(duration=${duration.inMilliseconds} ms)',
     );
+
     _audioPlayer.seek(target);
   }
 }

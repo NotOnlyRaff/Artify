@@ -96,10 +96,9 @@ class _DeleteArtistPageState extends ConsumerState<DeleteArtistPage> {
     final isLoading = ref
         .watch(artistViewModelProvider.select((val) => val?.isLoading == true));
 
+    // 🔹 chiamata al provider SENZA search => backend ritorna TUTTI gli artisti
     final artistsAsync = ref.watch(
-      getArtistsProvider(
-        search: _query.trim().isEmpty ? null : _query.trim(),
-      ),
+      getArtistsProvider(), // nessun filtro server-side
     );
 
     return Scaffold(
@@ -181,7 +180,22 @@ class _DeleteArtistPageState extends ConsumerState<DeleteArtistPage> {
                   Expanded(
                     child: artistsAsync.when(
                       data: (artists) {
-                        if (artists.isEmpty) {
+                        // filtro in memoria in base a _query
+                        final q = _query.trim().toLowerCase();
+
+                        final filtered = q.isEmpty
+                            ? artists
+                            : artists.where((artist) {
+                                final name = artist.name.toLowerCase();
+                                final display =
+                                    (artist.displayName ?? '').toLowerCase();
+                                final slug = (artist.slug ?? '').toLowerCase();
+                                return name.contains(q) ||
+                                    display.contains(q) ||
+                                    slug.contains(q);
+                              }).toList();
+
+                        if (filtered.isEmpty) {
                           return Center(
                             child: Text(
                               'No artists found.',
@@ -194,11 +208,11 @@ class _DeleteArtistPageState extends ConsumerState<DeleteArtistPage> {
                         }
 
                         return ListView.separated(
-                          itemCount: artists.length,
+                          itemCount: filtered.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 8),
                           itemBuilder: (context, index) {
-                            final artist = artists[index];
+                            final artist = filtered[index];
                             return _buildArtistTile(context, artist);
                           },
                         );

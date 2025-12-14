@@ -16,7 +16,7 @@ class SearchSongTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = song.songName;
     final artist = song.artists.isNotEmpty
-        ? song.artists.map((a) => a.artist.name).join(', ')
+        ? song.artists.map((a) => a.artistName).join(', ')
         : 'Unknown Artist';
 
     return Container(

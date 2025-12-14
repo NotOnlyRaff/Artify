@@ -1,6 +1,5 @@
 import 'package:client/core/failure/failure.dart';
 import 'package:client/core/providers/current_user_notifier.dart';
-import 'package:client/features/home/models/fav_song_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:client/features/home/song/repositories/song_remote_repository.dart';
@@ -154,30 +153,33 @@ class SongViewModel extends _$SongViewModel {
     final userNotifier = ref.read(currentUserNotifierProvider.notifier);
     final currentUser = ref.read(currentUserNotifierProvider)!;
 
+    // favorites ora è List<String> (lista di songId)
+    final List<String> currentFavs = currentUser.favorites;
+
     if (isFavorited) {
+      // aggiungo l'id se non già presente
+      final updatedFavs = <String>{
+        ...currentFavs,
+        songId,
+      }.toList();
+
       userNotifier.addUser(
         currentUser.copyWith(
-          favorites: [
-            ...currentUser.favorites,
-            FavSongModel(
-              id: '',
-              song_id: songId,
-              user_id: '',
-            ),
-          ],
+          favorites: updatedFavs,
         ),
       );
     } else {
+      // rimuovo l'id
+      final updatedFavs = currentFavs.where((id) => id != songId).toList();
+
       userNotifier.addUser(
         currentUser.copyWith(
-          favorites: currentUser.favorites
-              .where((fav) => fav.song_id != songId)
-              .toList(),
+          favorites: updatedFavs,
         ),
       );
     }
 
-    // ricarica provider dei preferiti
+    // ricarica provider dei preferiti remoti
     ref.invalidate(getFavSongsProvider);
 
     return state = AsyncValue.data(isFavorited);

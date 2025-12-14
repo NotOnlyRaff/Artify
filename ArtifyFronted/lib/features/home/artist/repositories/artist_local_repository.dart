@@ -27,7 +27,10 @@ class ArtistLocalRepository {
 
   /// Rimuove un singolo artista dai “recently opened”.
   Future<void> removeFromRecentlyOpened(String artistId) async {
-    await _box.delete(artistId);
+    // 👇 FIX: se la box non è aperta, esci silenziosamente
+    if (!Hive.isBoxOpen(_boxName)) return;
+    final box = _getBox();
+    await box.delete(artistId);
   }
 
   List<ArtistModel> loadRecentlyOpened() {

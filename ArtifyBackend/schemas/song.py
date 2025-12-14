@@ -103,7 +103,10 @@ class SongOut(BaseModel):
     # join esplicite song <-> artist (con ruolo, ecc.)
     # NB: il nome del campo ora combacia con la relationship SQLAlchemy:
     # Song.song_artist_links
-    song_artist_links: List[SongArtistOut] = Field(default_factory=list)
+    artist_links: List[SongArtistOut] = Field(
+        default_factory=list,
+        alias="song_artist_links",  # nome della relationship in SQLAlchemy
+    )
 
     # lista di artisti (M:N "di comodo", via Song.artists)
     artists: List[ArtistRef] = Field(default_factory=list)

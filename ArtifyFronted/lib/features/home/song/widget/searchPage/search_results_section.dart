@@ -1,3 +1,4 @@
+import 'package:client/features/home/artist/view/pages/artist_detail_page.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/album/model/album_model.dart';
@@ -27,7 +28,7 @@ class SearchResultsSection extends StatelessWidget {
       final titleMatch = song.songName.toLowerCase().contains(q);
 
       final artistMatch = song.artists.any(
-        (a) => a.artist.name.toLowerCase().contains(q),
+        (a) => a.artistName?.toLowerCase().contains(q) == true,
       );
 
       return titleMatch || artistMatch;
@@ -116,7 +117,7 @@ class _SongResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final artist = song.artists.isNotEmpty
-        ? song.artists.map((a) => a.artist.name).join(', ')
+        ? song.artists.map((a) => a.artistName).join(', ')
         : 'Unknown artist';
 
     return Container(
@@ -212,47 +213,51 @@ class _ArtistResultTile extends StatelessWidget {
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        leading: CircleAvatar(
-          radius: 22,
-          backgroundColor: Colors.white.withOpacity(0.06),
-          backgroundImage:
-              artist.imageUrl != null ? NetworkImage(artist.imageUrl!) : null,
-          child: artist.imageUrl == null
-              ? const Icon(
-                  Icons.person_rounded,
-                  color: Colors.white70,
-                )
-              : null,
-        ),
-        title: Text(
-          displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          leading: CircleAvatar(
+            radius: 22,
+            backgroundColor: Colors.white.withOpacity(0.06),
+            backgroundImage:
+                artist.imageUrl != null ? NetworkImage(artist.imageUrl!) : null,
+            child: artist.imageUrl == null
+                ? const Icon(
+                    Icons.person_rounded,
+                    color: Colors.white70,
+                  )
+                : null,
           ),
-        ),
-        subtitle: Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white70,
-            fontSize: 12,
+          title: Text(
+            displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 16,
-          color: Colors.white54,
-        ),
-        onTap: () {
-          // TODO: apri artista detail page
-        },
-      ),
+          subtitle: Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+          trailing: const Icon(
+            Icons.arrow_forward_ios_rounded,
+            size: 16,
+            color: Colors.white54,
+          ),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ArtistDetailPage(artistId: artist.id),
+              ),
+            );
+          }),
     );
   }
 }

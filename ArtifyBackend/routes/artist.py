@@ -67,7 +67,7 @@ def get_artist(
 # ---------- LISTA ARTISTI ----------
 
 @router.get(
-    "/",   # GET /artist/
+    "",   # GET /artist/
     response_model=List[ArtistOut],
 )
 def list_artists(
@@ -148,7 +148,7 @@ def _resolve_albums(db: Session, album_ids: List[str]) -> List[Album]:
 # ---------- CREATE ARTIST ----------
 
 @router.post(
-    "/",   # 👈 nota lo slash
+    "",   # 👈 nota lo slash
     status_code=status.HTTP_201_CREATED,
     response_model=ArtistOut,
 )

@@ -36,7 +36,7 @@ final getFavSongsProvider = AutoDisposeFutureProvider<List<SongModel>>.internal(
 );
 
 typedef GetFavSongsRef = AutoDisposeFutureProviderRef<List<SongModel>>;
-String _$songViewModelHash() => r'55ee2f3f8c28ed79911f716c5752d89133bd6a0f';
+String _$songViewModelHash() => r'b542968ca842c7de02453b91796e4c1f3d1d1fa9';
 
 /// ───────────────── VIEWMODEL CANZONI ─────────────────
 /// Gestisce:

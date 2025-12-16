@@ -9,6 +9,7 @@ import 'package:client/features/home/admin/view/widgets/uploadSong/upload_artwor
 import 'package:client/features/home/admin/view/widgets/uploadSong/upload_text_field.dart';
 import 'package:client/features/home/admin/view/widgets/uploadSong/upload_release_date_field.dart';
 import 'package:client/features/home/admin/view/widgets/uploadSong/upload_lyrics_field.dart';
+import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
@@ -223,11 +224,17 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
     // LISTEN sullo stato del ViewModel (success/error)
     ref.listen<AsyncValue?>(songViewModelProvider, (prev, next) {
       if (next == null) return;
-
       next.when(
         data: (data) {
           showSnackBar(context, 'Song uploaded successfully!');
-          Navigator.pop(context);
+
+          // Se il ViewModel ritorna il SongModel, lo rimandiamo indietro al caller
+          if (data is SongModel) {
+            Navigator.pop(context, data);
+          } else {
+            // fallback: mantiene il comportamento attuale
+            Navigator.pop(context);
+          }
         },
         error: (error, stack) {
           showSnackBar(context, error.toString());

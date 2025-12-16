@@ -3,6 +3,7 @@ import 'package:client/core/theme/theme.dart';
 import 'package:client/features/auth/view/pages/signup_page.dart';
 import 'package:client/features/auth/viewmodel/auth_viewmodel.dart';
 import 'package:client/features/home/view/pages/home_page.dart';
+import 'package:client/features/home/view/widgets/space_background.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -50,6 +51,16 @@ class MyApp extends ConsumerWidget {
       title: 'Music App',
       theme: AppTheme.darkThemeMode,
       home: currentUser == null ? const SignupPage() : const HomePage(),
+      builder: (context, child) {
+        // qui metti lo sfondo spaziale una volta sola
+        return Stack(
+          children: [
+            const SpaceBackground(), // 🌌 dietro a TUTTO
+            const SpaceBackground(), // 🌌 dietro a TUTTO
+            if (child != null) child, // pagina corrente (Home, Artist, ecc.)
+          ],
+        );
+      },
     );
   }
 }

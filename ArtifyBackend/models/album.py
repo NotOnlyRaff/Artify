@@ -14,6 +14,7 @@ class Album(Base):
     label = Column(VARCHAR(120), nullable=True)
     total_tracks = Column(Integer, nullable=True)
     album_type = Column(VARCHAR(30), nullable=True)
+    genre = Column(VARCHAR(30), nullable=True)
 
     # --- Relazioni ---
 

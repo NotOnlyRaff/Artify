@@ -30,6 +30,7 @@ class AlbumBase(BaseModel):
     release_date: Optional[date] = None
     label: Optional[str] = None
     album_type: Optional[str] = None  # "album", "single", "ep", ...
+    genre: Optional[str] = None
 
 
 class AlbumCreate(AlbumBase):
@@ -53,6 +54,7 @@ class AlbumUpdate(BaseModel):
     label: Optional[str] = None
     album_type: Optional[str] = None
     cover_url: Optional[str] = None
+    genre: Optional[str] = None
 
     artist_ids: Optional[List[str]] = None
     song_ids: Optional[List[str]] = None

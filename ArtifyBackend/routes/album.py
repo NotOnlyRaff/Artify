@@ -123,6 +123,7 @@ def create_album(
         release_date=payload.release_date,
         label=payload.label,
         album_type=payload.album_type,
+        genre=genre,
         cover_url=payload.cover_url,
         total_tracks=len(songs) if songs else None,
     )

@@ -46,14 +46,9 @@ class MusicSlab extends ConsumerWidget {
     );
 
     debugPrint(
-      '[MusicSlab] build – currentSong: ${currentSong?.id ?? "null"} / '
-      '${currentSong?.songName ?? "-"}',
+      '[MusicSlab] build – currentSong: ${currentSong.id} / '
+      '${currentSong.songName}',
     );
-
-    if (currentSong == null) {
-      debugPrint('[MusicSlab] no currentSong -> returning SizedBox.shrink');
-      return const SizedBox.shrink(); // O un widget di fallback
-    }
 
     final isFav = userFavorites.any((fav) => fav == currentSong.id);
 

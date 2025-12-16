@@ -55,6 +55,7 @@ dependencies:
   particles_network: ^1.7.2
   particles_flutter: ^1.0.1
   flutter_animate: ^4.2.0
+  particle_effect: ^1.0.5
 
 dev_dependencies:
   flutter_test:

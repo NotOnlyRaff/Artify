@@ -27,56 +27,45 @@ class AdminPage extends ConsumerWidget {
     final songsAsync = ref.watch(getAllSongsProvider);
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF050509),
-              Color(0xFF140813),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 16),
-                _buildAdminBadge(),
-                const SizedBox(height: 20),
-                _buildQuickActions(context),
-                const SizedBox(height: 24),
-                Text(
-                  'Songs overview',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+      // IMPORTANTISSIMO: niente nero, niente gradiente, così si vede SpaceBackground
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 16),
+              _buildAdminBadge(),
+              const SizedBox(height: 20),
+              _buildQuickActions(context),
+              const SizedBox(height: 24),
+              Text(
+                'Songs overview',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: songsAsync.when(
-                    data: (songs) => _buildSongList(context, songs),
-                    loading: () => const Center(child: Loader()),
-                    error: (e, _) => Center(
-                      child: Text(
-                        e.toString(),
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white70,
-                          fontSize: 13,
-                        ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: songsAsync.when(
+                  data: (songs) => _buildSongList(context, songs),
+                  loading: () => const Center(child: Loader()),
+                  error: (e, _) => Center(
+                    child: Text(
+                      e.toString(),
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white70,
+                        fontSize: 13,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -172,11 +161,10 @@ class AdminPage extends ConsumerWidget {
   }
 
   // QUICK ACTIONS ------------------------------------------------------------
-  // → 3 card (Songs, Artists, Albums) su un’unica riga, scrollabile orizzontalmente.
 
   Widget _buildQuickActions(BuildContext context) {
     return SizedBox(
-      height: 150, // altezza fissa per le card admin
+      height: 150,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
@@ -215,7 +203,6 @@ class AdminPage extends ConsumerWidget {
               ],
             ),
           ),
-
           const SizedBox(width: 12),
 
           // ARTISTS
@@ -253,7 +240,6 @@ class AdminPage extends ConsumerWidget {
               ],
             ),
           ),
-
           const SizedBox(width: 12),
 
           // ALBUMS
@@ -263,7 +249,7 @@ class AdminPage extends ConsumerWidget {
               title: 'Albums',
               subtitle: 'Create, link & delete albums',
               icon: Icons.album_rounded,
-              accent: const Color(0xFFF97316), // arancio caldo
+              accent: const Color(0xFFF97316),
               actions: [
                 _InlineActionButton(
                   label: 'New album',
@@ -449,7 +435,7 @@ class _AdminActionCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // evita problemi con height non finita
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(

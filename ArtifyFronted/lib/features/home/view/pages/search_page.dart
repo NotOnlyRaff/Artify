@@ -52,89 +52,78 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       ),
     );
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF050509),
-              Color(0xFF140813),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SearchHeader(),
-              const SizedBox(height: 16),
-              SearchField(
-                controller: _searchController,
-                query: _query,
-                onQueryChanged: (value) {
-                  setState(() {
-                    _query = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: songsAsync.when(
-                  data: (songs) {
-                    final List<AlbumModel> albums =
-                        albumsAsync.asData?.value ?? <AlbumModel>[];
-                    final List<ArtistModel> artists =
-                        artistsAsync.asData?.value ?? <ArtistModel>[];
+    // ⚠️ NIENTE Scaffold, NIENTE gradient locale:
+    // lascia che lo sfondo arrivi da HomePage (SpaceBackground)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        const SearchHeader(),
+        const SizedBox(height: 16),
 
-                    return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: _query.trim().isEmpty
-                          ? SearchExploreSection(
-                              songs: songs,
-                              onSongTap: (song) {
-                                // Quando una canzone è tappata, la aggiorniamo
-                                ref
-                                    .read(currentSongNotifierProvider.notifier)
-                                    .updateSong(song);
-                              },
-                            )
-                          : SearchResultsSection(
-                              songs: songs,
-                              artists: artists,
-                              albums: albums,
-                              query: _query,
-                              onSongTap: (song) {
-                                // Quando una canzone è tappata, la aggiorniamo
-                                ref
-                                    .read(currentSongNotifierProvider.notifier)
-                                    .updateSong(song);
-                              },
-                            ),
-                    );
-                  },
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(
-                      color: Pallete.gradient2,
-                    ),
-                  ),
-                  error: (e, _) => Center(
-                    child: Text(
-                      e.toString(),
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white70,
-                        fontSize: 14,
+        // campo di ricerca
+        SearchField(
+          controller: _searchController,
+          query: _query,
+          onQueryChanged: (value) {
+            setState(() {
+              _query = value;
+            });
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // risultati / explore
+        Expanded(
+          child: songsAsync.when(
+            data: (songs) {
+              final List<AlbumModel> albums =
+                  albumsAsync.asData?.value ?? <AlbumModel>[];
+              final List<ArtistModel> artists =
+                  artistsAsync.asData?.value ?? <ArtistModel>[];
+
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: _query.trim().isEmpty
+                    ? SearchExploreSection(
+                        songs: songs,
+                        onSongTap: (song) {
+                          ref
+                              .read(currentSongNotifierProvider.notifier)
+                              .updateSong(song);
+                        },
+                      )
+                    : SearchResultsSection(
+                        songs: songs,
+                        artists: artists,
+                        albums: albums,
+                        query: _query,
+                        onSongTap: (song) {
+                          ref
+                              .read(currentSongNotifierProvider.notifier)
+                              .updateSong(song);
+                        },
                       ),
-                    ),
-                  ),
+              );
+            },
+            loading: () => const Center(
+              child: CircularProgressIndicator(
+                color: Pallete.gradient2,
+              ),
+            ),
+            error: (e, _) => Center(
+              child: Text(
+                e.toString(),
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white70,
+                  fontSize: 14,
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

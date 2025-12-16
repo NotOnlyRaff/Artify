@@ -41,6 +41,7 @@ class AlbumRemoteRepository {
     DateTime? releaseDate,
     String? label,
     String? albumType,
+    String? genre,
     String? coverUrl,
     List<String> artistIds = const [],
     List<String> songIds = const [],
@@ -64,6 +65,9 @@ class AlbumRemoteRepository {
       }
       if (albumType != null && albumType.trim().isNotEmpty) {
         body['album_type'] = albumType.trim();
+      }
+      if (genre != null && genre.trim().isNotEmpty) {
+        body['genre'] = genre.trim();
       }
       if (coverUrl != null && coverUrl.trim().isNotEmpty) {
         body['cover_url'] = coverUrl.trim();
@@ -210,6 +214,7 @@ class AlbumRemoteRepository {
     DateTime? releaseDate,
     String? label,
     String? albumType,
+    String? genre,
     String? coverUrl,
     List<String>? artistIds,
     List<String>? songIds,
@@ -229,6 +234,7 @@ class AlbumRemoteRepository {
 
       if (label != null) body['label'] = label.trim();
       if (albumType != null) body['album_type'] = albumType.trim();
+      if (genre != null) body['genre'] = genre.trim();
       if (coverUrl != null) body['cover_url'] = coverUrl.trim();
 
       if (artistIds != null) {

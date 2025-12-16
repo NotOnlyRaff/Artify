@@ -10,6 +10,7 @@ class AlbumModel {
   final String? label;
   final int? totalTracks;
   final String? albumType; // 'album', 'single', 'ep', ecc.
+  final String? genre;
 
   final List<AlbumArtistModel> artists;
 
@@ -21,6 +22,7 @@ class AlbumModel {
     this.label,
     this.totalTracks,
     this.albumType,
+    this.genre,
     this.artists = const [],
   });
 
@@ -32,6 +34,7 @@ class AlbumModel {
     String? label,
     int? totalTracks,
     String? albumType,
+    String? genre,
   }) {
     return AlbumModel(
       id: id ?? this.id,
@@ -41,6 +44,7 @@ class AlbumModel {
       label: label ?? this.label,
       totalTracks: totalTracks ?? this.totalTracks,
       albumType: albumType ?? this.albumType,
+      genre: genre ?? this.genre,
       artists: artists,
     );
   }
@@ -62,6 +66,8 @@ class AlbumModel {
       })(),
       albumType:
           map['album_type'] == null ? null : map['album_type'].toString(),
+      genre: 
+          map['genre'] == null ? null : map['genre'].toString(),
       artists: (map['artists'] as List<dynamic>? ?? [])
           .map(
             (e) => AlbumArtistModel.fromMap(
@@ -89,6 +95,8 @@ class AlbumModel {
       })(),
       albumType:
           json['album_type'] == null ? null : json['album_type'].toString(),
+      genre:
+          json['genre'] == null ? null : json['genre'].toString(),
       artists: (json['artists'] as List<dynamic>? ?? [])
           .map(
             (e) => AlbumArtistModel.fromMap(
@@ -108,13 +116,14 @@ class AlbumModel {
       'label': label,
       'total_tracks': totalTracks,
       'album_type': albumType,
+      'genre': genre,
       'artists': artists.map((a) => a.toMap()).toList(),
     };
   }
 
   @override
   String toString() {
-    return 'AlbumModel(id: $id, title: $title, coverUrl: $coverUrl, releaseDate: $releaseDate, label: $label, totalTracks: $totalTracks, albumType: $albumType, artists: $artists)';
+    return 'AlbumModel(id: $id, title: $title, coverUrl: $coverUrl, releaseDate: $releaseDate, label: $label, totalTracks: $totalTracks, albumType: $albumType, genre: $genre, artists: $artists)';
   }
 
   @override

@@ -114,7 +114,7 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
   void _addExistingTrack(SongModel song) {
     setState(() {
       // evita duplicati
-      if (_tracks.any((t) => !t.isDraft && t.existingSong!.id == song.id)) {
+      if (_tracks.any((t) => t.existingSong!.id == song.id)) {
         return;
       }
       _tracks.add(AlbumTrackEntry.existing(song));
@@ -127,9 +127,9 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
     });
   }
 
-  void _addDraftTrack(AlbumTrackDraft draft) {
+  void _addLocalTrack(AlbumTrackLocal track) {
     setState(() {
-      _tracks.add(AlbumTrackEntry.draft(draft));
+      _tracks.add(AlbumTrackEntry.local(track));
     });
   }
 
@@ -151,64 +151,47 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
 
   // ───────────── SUBMIT ─────────────
 
-Future<void> _submit() async {
-  FocusScope.of(context).unfocus();
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
 
-  final title = _titleController.text.trim();
-  final label = _labelController.text.trim();
-  final genre = _genreController.text.trim();
+    final title = _titleController.text.trim();
+    final label = _labelController.text.trim();
+    final genre = _genreController.text.trim();
 
-  if (title.isEmpty) {
-    setState(() => _currentTabIndex = 0);
-    showSnackBar(context, 'Album title is required.');
-    return;
+    if (title.isEmpty) {
+      setState(() => _currentTabIndex = 0);
+      showSnackBar(context, 'Album title is required.');
+      return;
+    }
+
+    final artistIds = _selectedArtists.map((a) => a.id).toList();
+
+    // 1. separo le entry esistenti da quelle draft
+    final existingEntries =
+        _tracks.where((t) => t.existingSong != null).toList();
+
+    // 3. mappo solo le tracce esistenti in una vera List<String> (senza null)
+    final List<String> allSongIds =
+        existingEntries.map((e) => e.existingSong!.id).toList();
+
+    // Se vuoi OBBLIGARE almeno una traccia, scommenta:
+    // if (allSongIds.isEmpty) {
+    //   setState(() => _currentTabIndex = 1);
+    //   showSnackBar(context, 'Add at least one track to the album.');
+    //   return;
+    // }
+
+    await ref.read(albumViewModelProvider.notifier).createAlbum(
+          title: title,
+          releaseDate: _releaseDate,
+          label: label.isEmpty ? null : label,
+          albumType: _selectedAlbumType,
+          genre: genre.isEmpty ? null : genre,
+          coverUrl: null, // per ora come prima
+          artistIds: artistIds,
+          songIds: allSongIds, // ✅ ora è List<String>, niente null
+        );
   }
-
-  final artistIds = _selectedArtists.map((a) => a.id).toList();
-
-  // 1. separo le entry esistenti da quelle draft
-  final existingEntries = _tracks
-      .where((t) => !t.isDraft && t.existingSong != null)
-      .toList();
-
-  final draftEntries = _tracks.where((t) => t.isDraft).toList();
-
-  // 2. se hai già implementato la creazione delle song dai draft,
-  //    qui dovresti prima creare le song e aggiungere gli id a songIds.
-  //    Per ora blocchiamo se ci sono draft (così l'errore è chiaro).
-  if (draftEntries.isNotEmpty) {
-    setState(() => _currentTabIndex = 1);
-    showSnackBar(
-      context,
-      'You added tracks that only exist as drafts. '
-      'Implement draft upload or remove them before creating the album.',
-    );
-    return;
-  }
-
-  // 3. mappo solo le tracce esistenti in una vera List<String> (senza null)
-  final List<String> allSongIds =
-      existingEntries.map((e) => e.existingSong!.id).toList();
-
-  // Se vuoi OBBLIGARE almeno una traccia, scommenta:
-  // if (allSongIds.isEmpty) {
-  //   setState(() => _currentTabIndex = 1);
-  //   showSnackBar(context, 'Add at least one track to the album.');
-  //   return;
-  // }
-
-  await ref.read(albumViewModelProvider.notifier).createAlbum(
-        title: title,
-        releaseDate: _releaseDate,
-        label: label.isEmpty ? null : label,
-        albumType: _selectedAlbumType,
-        genre: genre.isEmpty ? null : genre,
-        coverUrl: null, // per ora come prima
-        artistIds: artistIds,
-        songIds: allSongIds, // ✅ ora è List<String>, niente null
-      );
-}
-
 
   // ───────────── BUILD ─────────────
 
@@ -468,7 +451,7 @@ Future<void> _submit() async {
         return TracksTab(
           tracks: _tracks,
           onAddExistingTrack: _addExistingTrack,
-          onAddDraftTrack: _addDraftTrack,
+          onAddLocalTrack: _addLocalTrack,
           onRemoveTrack: _removeTrack,
           onMoveTrack: _moveTrack,
           trackSearchController: _trackSearchController,

@@ -1,11 +1,11 @@
 # schemas/song.py
 
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
-
-from schemas.songArtist import SongArtistOut  # se il path è diverso, adattalo
+from models.songArtist import SongArtistRole
+from schemas.songArtist import SongArtistOut
 
 
 # --- REF MINIMALI USATI DA ALBUM E SONG ---
@@ -21,7 +21,7 @@ class ArtistRef(BaseModel):
     image_url: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        orm_mode = True   # ok, warning ma funziona anche in v2
 
 
 class AlbumRef(BaseModel):
@@ -41,7 +41,9 @@ class AlbumRef(BaseModel):
 
 class SongBase(BaseModel):
     song_name: str
-    release_date: date
+    song_url: str                    # ✅ type annotation corretta
+    thumbnail_url: Optional[str] = None
+    release_date: Optional[date] = None
     composer_name: str
     producer_name: Optional[str] = None
     genre: Optional[str] = None
@@ -51,14 +53,9 @@ class SongBase(BaseModel):
 
 
 class SongCreate(SongBase):
-    """
-    Payload di input per creare un brano.
-    artist_ids e album_ids servono a popolare le tabelle di join.
-    Se gestisci song_url a livello di servizio (es. dopo upload su S3),
-    puoi continuare a non richiederlo nel payload.
-    """
+    # meglio evitare liste/dict mutabili come default: usa default_factory
     artist_ids: List[str] = Field(default_factory=list)
-    album_ids: List[str] = Field(default_factory=list)
+    artist_roles: Dict[str, SongArtistRole] = Field(default_factory=dict)
 
 
 class SongUpdate(BaseModel):
@@ -100,18 +97,11 @@ class SongOut(BaseModel):
     mood: Optional[str] = None
     duration_seconds: Optional[int] = None
 
-    # join esplicite song <-> artist (con ruolo, ecc.)
-    # NB: il nome del campo ora combacia con la relationship SQLAlchemy:
-    # Song.song_artist_links
     artist_links: List[SongArtistOut] = Field(
         default_factory=list,
-        alias="song_artist_links",  # nome della relationship in SQLAlchemy
+        alias="song_artist_links",
     )
-
-    # lista di artisti (M:N "di comodo", via Song.artists)
     artists: List[ArtistRef] = Field(default_factory=list)
-
-    # lista di album (M:N "di comodo", via Song.albums)
     albums: List[AlbumRef] = Field(default_factory=list)
 
     class Config:

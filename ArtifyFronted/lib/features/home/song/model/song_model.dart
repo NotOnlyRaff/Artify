@@ -11,7 +11,7 @@ class SongModel {
   final String songName;
   final String songUrl;
   final String? thumbnailUrl;
-  final DateTime releaseDate;
+  final DateTime? releaseDate;
   final String composerName;
   final String? producerName;
   final String? genre;
@@ -132,7 +132,7 @@ class SongModel {
       'song_name': songName,
       'song_url': songUrl,
       'thumbnail_url': thumbnailUrl,
-      'release_date': releaseDate.toIso8601String(),
+      'release_date': releaseDate?.toIso8601String(),
       'composer_name': composerName,
       'producer_name': producerName,
       'genre': genre,

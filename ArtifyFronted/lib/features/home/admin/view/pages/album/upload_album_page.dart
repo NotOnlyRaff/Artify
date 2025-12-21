@@ -8,6 +8,7 @@ import 'package:client/features/home/admin/view/widgets/uploadAlbum/details_tab.
 import 'package:client/features/home/admin/view/widgets/uploadAlbum/tracks_tab.dart';
 import 'package:client/features/home/album/viewmodel/album_viewmodel.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 
 import 'package:flutter/material.dart';
@@ -111,19 +112,20 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
     });
   }
 
-  void _addExistingTrack(SongModel song) {
-    setState(() {
-      // evita duplicati
-      if (_tracks.any((t) => t.existingSong!.id == song.id)) {
-        return;
-      }
-      _tracks.add(AlbumTrackEntry.existing(song));
-    });
-  }
-
   void _removeArtist(ArtistModel artist) {
     setState(() {
       _selectedArtists.removeWhere((a) => a.id == artist.id);
+    });
+  }
+
+  void _addExistingTrack(SongModel song) {
+    setState(() {
+      // evita duplicati, tenendo conto che alcune entry possono essere "local"
+      final alreadyPresent =
+          _tracks.any((t) => t.existingSong?.id == song.id);
+      if (alreadyPresent) return;
+
+      _tracks.add(AlbumTrackEntry.existing(song));
     });
   }
 
@@ -131,6 +133,11 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
     setState(() {
       _tracks.add(AlbumTrackEntry.local(track));
     });
+
+    debugPrint(
+        '[UploadAlbumPage] _addLocalTrack -> added local track '
+        'localId=${track.localId}, title=${track.title}. '
+        'Total tracks now: ${_tracks.length}');
   }
 
   void _removeTrack(AlbumTrackEntry entry) {
@@ -150,7 +157,6 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
   }
 
   // ───────────── SUBMIT ─────────────
-
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
@@ -166,20 +172,90 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
 
     final artistIds = _selectedArtists.map((a) => a.id).toList();
 
-    // 1. separo le entry esistenti da quelle draft
+    // DEBUG STATO PRIMA DI ELABORARE
+    debugPrint('================= CREATE ALBUM DEBUG =================');
+    debugPrint('Album title: $title');
+    debugPrint('Album releaseDate: $_releaseDate');
+    debugPrint('Album label: "$label"');
+    debugPrint('Album genre: "$genre"');
+    debugPrint('Album type: $_selectedAlbumType');
+    debugPrint('Selected album artists: $artistIds');
+    debugPrint('Total _tracks in state: ${_tracks.length}');
+
+    for (var i = 0; i < _tracks.length; i++) {
+      final t = _tracks[i];
+      debugPrint('[TRACK $i] '
+          'existingSong=${t.existingSong != null} '
+          'local=${t.local != null} '
+          'existingId=${t.existingSong?.id} '
+          'localId=${t.local?.localId} '
+          'title=${t.displayTitle}');
+    }
+
+    // 1) Tracce esistenti -> song_ids
     final existingEntries =
         _tracks.where((t) => t.existingSong != null).toList();
 
-    // 3. mappo solo le tracce esistenti in una vera List<String> (senza null)
-    final List<String> allSongIds =
+    final List<String> existingSongIds =
         existingEntries.map((e) => e.existingSong!.id).toList();
 
-    // Se vuoi OBBLIGARE almeno una traccia, scommenta:
-    // if (allSongIds.isEmpty) {
-    //   setState(() => _currentTabIndex = 1);
-    //   showSnackBar(context, 'Add at least one track to the album.');
-    //   return;
-    // }
+    // 2) Tracce locali -> newSongs (SongModel)
+    final localEntries = _tracks.where((t) => t.local != null).toList();
+
+    debugPrint('existingEntries count: ${existingEntries.length}');
+    debugPrint('localEntries count: ${localEntries.length}');
+
+    final bool hasAlbumGenre = genre.isNotEmpty;
+    final String? albumGenreOrNull = hasAlbumGenre ? genre : null;
+
+final List<SongModel> newSongs = localEntries.map((entry) {
+      final track = entry.local!;
+      final trackArtistIds =
+          track.artistIds.isNotEmpty ? track.artistIds : artistIds;
+
+      // 🔹 mappa gli ID in SongArtistModel + role
+      final List<SongArtistModel> songArtists = trackArtistIds.map((artistId) {
+        final role = track.artistRoles[artistId] ?? SongArtistRole.primary;
+        return SongArtistModel(
+          artistId: artistId,
+          role: role,
+        );
+      }).toList();
+
+
+      final song = SongModel(
+        id: 'local-${track.localId}', // id fittizio lato FE
+        songName: track.title,
+        songUrl: track.songUrl,       // String (path/blob/url) come nel resto del progetto
+        thumbnailUrl: null,
+        releaseDate: _releaseDate,
+        composerName: track.composer,
+        producerName: null,
+        genre: track.genre ?? albumGenreOrNull,
+        lyrics: track.lyrics,
+        mood: track.mood,
+        artists: songArtists,         // ✅ ora è List<SongArtistModel>, non List<String>
+      );
+      
+
+      debugPrint('  -> mapped local track to SongModel '
+          'id=${song.id}, name=${song.songName}, url=${song.songUrl}');
+      return song;
+    }).toList();
+
+    debugPrint('existingSongIds: $existingSongIds');
+    debugPrint('newSongs count: ${newSongs.length}');
+    debugPrint('newSongs titles: ${newSongs.map((s) => s.songName).toList()}');
+
+    if (existingSongIds.isEmpty && newSongs.isEmpty) {
+      debugPrint(
+          'ABORT CREATE ALBUM: existingSongIds.isEmpty && newSongs.isEmpty');
+      setState(() => _currentTabIndex = 1);
+      showSnackBar(context, 'Add at least one track to the album.');
+      return;
+    }
+
+    final String? coverUrl = null;
 
     await ref.read(albumViewModelProvider.notifier).createAlbum(
           title: title,
@@ -187,11 +263,14 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
           label: label.isEmpty ? null : label,
           albumType: _selectedAlbumType,
           genre: genre.isEmpty ? null : genre,
-          coverUrl: null, // per ora come prima
+          coverUrl: coverUrl,
           artistIds: artistIds,
-          songIds: allSongIds, // ✅ ora è List<String>, niente null
+          songIds: existingSongIds,
+          newSongs: newSongs, // <-- deve esistere nel viewmodel / repository
         );
   }
+
+
 
   // ───────────── BUILD ─────────────
 
@@ -341,9 +420,8 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
                                     _buildTabSwitcher(),
                                     const SizedBox(height: 20),
                                     AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 220,
-                                      ),
+                                      duration:
+                                          const Duration(milliseconds: 220),
                                       switchInCurve: Curves.easeOutCubic,
                                       switchOutCurve: Curves.easeInCubic,
                                       child: _buildCurrentTab(context),

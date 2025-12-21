@@ -1,13 +1,11 @@
-# pydantic_schemas/album.py
+# schemas/album.py
 
 from datetime import date
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
-
-# ATTENZIONE: aggiorna l'import al path reale del tuo progetto
-# prima era: from schemas.song import ArtistRef
-from schemas.song import ArtistRef
+from models.song import Song
+from schemas.song import ArtistRef, SongCreate   # id, name, display_name, image_url
 
 
 class SongRef(BaseModel):
@@ -33,15 +31,19 @@ class AlbumBase(BaseModel):
     genre: Optional[str] = None
 
 
+
 class AlbumCreate(AlbumBase):
     """
     Payload di input quando crei un album.
-    Il FE ti manda gli id di artisti e song da collegare.
+
+    - artist_ids: artisti dell'album
+    - song_ids:  songs già esistenti nel DB, collegate in ordine
+    - new_songs: nuove songs da creare e collegare
     """
     cover_url: Optional[str] = None
-    # usare Field(default_factory=list) evita problemi di default mutabile
     artist_ids: List[str] = Field(default_factory=list)
     song_ids: List[str] = Field(default_factory=list)
+    new_songs: List[SongCreate] = Field(default_factory=list)
 
 
 class AlbumUpdate(BaseModel):

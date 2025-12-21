@@ -80,38 +80,62 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
     });
   }
 
-  void _submit() {
-    final title = _titleController.text.trim();
-    final composer = _composerController.text.trim();
-    final genre = _genreController.text.trim();
-    final mood = _moodController.text.trim();
-    final lyrics = _lyricsController.text.trim();
+void _submit() {
+  final title = _titleController.text.trim();
+  final composer = _composerController.text.trim();
+  final genre = _genreController.text.trim();
+  final mood = _moodController.text.trim();
+  final lyrics = _lyricsController.text.trim();
 
-    if (title.isEmpty || composer.isEmpty || _audio == null) {
-      showSnackBar(
-        context,
-        'Please fill track title, composer and select audio.',
-      );
-      return;
-    }
-
-    final artistIds = _selectedArtists.map((a) => a.id).toList();
-    final rolesCopy = Map<String, SongArtistRole>.from(_artistRoles);
-
-    final draft = AlbumTrackLocal(
-      localId: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title,
-      composer: composer,
-      audioFile: _audio!,
-      genre: genre.isEmpty ? null : genre,
-      mood: mood.isEmpty ? null : mood,
-      lyrics: lyrics.isEmpty ? null : lyrics,
-      artistIds: artistIds,
-      artistRoles: rolesCopy,
+  if (title.isEmpty || composer.isEmpty || _audio == null) {
+    showSnackBar(
+      context,
+      'Please fill track title, composer and select audio.',
     );
-
-    widget.onCreated(draft);
+    return;
   }
+
+  // 1) Prendo il path grezzo (nullable) da PickedMedia
+  final String? rawSongPath = _audio!.filePath; // o .path / .url a seconda di PickedMedia
+
+  // 2) Validazione: se è null o vuoto, blocco
+  if (rawSongPath == null || rawSongPath.isEmpty) {
+    showSnackBar(
+      context,
+      'Audio file path is missing. Please re-select the audio.',
+    );
+    return;
+  }
+
+  // 3) Ora ho una String non-null
+  final String songUrl = rawSongPath;
+
+  final artistIds = _selectedArtists.map((a) => a.id).toList();
+  final rolesCopy = Map<String, SongArtistRole>.from(_artistRoles);
+
+  final track = AlbumTrackLocal(
+    localId: DateTime.now().millisecondsSinceEpoch.toString(),
+    title: title,
+    composer: composer,
+    songUrl: songUrl, // ✅ String, non più String?
+    genre: genre.isEmpty ? null : genre,
+    mood: mood.isEmpty ? null : mood,
+    lyrics: lyrics.isEmpty ? null : lyrics,
+    artistIds: artistIds,
+    artistRoles: rolesCopy,
+  );
+
+  debugPrint('NewTrackSheet -> created local track:');
+  debugPrint('  localId: ${track.localId}');
+  debugPrint('  title: ${track.title}');
+  debugPrint('  composer: ${track.composer}');
+  debugPrint('  songUrl: ${track.songUrl}');
+  debugPrint('  artistIds: ${track.artistIds}');
+  debugPrint('  artistRoles: ${track.artistRoles}');
+
+  widget.onCreated(track);
+}
+
 
   @override
   Widget build(BuildContext context) {

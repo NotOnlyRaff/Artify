@@ -50,8 +50,6 @@ extension SongArtistRoleX on SongArtistRole {
 /// - SongArtistOut (con nested song / artist)
 /// - SongRef semplice (id, song_name, thumbnail_url) usato in ArtistOut.songs
 class SongArtistModel {
-  /// id della riga in `song_artists`
-  final String id;
 
   /// ruolo (primary, featured, ecc.)
   final SongArtistRole role;
@@ -67,7 +65,6 @@ class SongArtistModel {
   final String? artistImageUrl;
 
   const SongArtistModel({
-    required this.id,
     required this.role,
     this.songId,
     this.songName,
@@ -110,12 +107,8 @@ class SongArtistModel {
       artistImageUrl = a['image_url']?.toString();
     }
 
-    // id join row, se non c'è lo sintetizzo
-    final id = map['id']?.toString() ??
-        '${songId ?? ''}_${artistId ?? ''}_${role.value}';
 
     return SongArtistModel(
-      id: id,
       role: role,
       songId: songId,
       songName: songName,
@@ -128,7 +121,6 @@ class SongArtistModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'role': role.value,
       'song_id': songId,
       'song_name': songName,

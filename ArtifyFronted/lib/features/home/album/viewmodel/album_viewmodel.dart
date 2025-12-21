@@ -2,7 +2,8 @@ import 'package:client/core/providers/current_user_notifier.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/album/repositories/album_local_repository.dart';
 import 'package:client/features/home/album/repositories/album_remote_repository.dart';
-import 'package:fpdart/fpdart.dart'; // 👈 per Either, Left, Right
+import 'package:client/features/home/song/model/song_model.dart';
+import 'package:fpdart/fpdart.dart'; // Either, Left, Right
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'album_viewmodel.g.dart';
@@ -26,7 +27,6 @@ Future<List<AlbumModel>> getAllAlbums(
     artistId: artistId,
   );
 
-  // niente fold, niente match -> solo pattern matching
   return switch (res) {
     Left(value: final failure) => throw failure.message,
     Right(value: final albums) => albums,
@@ -72,6 +72,10 @@ class AlbumViewModel extends _$AlbumViewModel {
   }
 
   /// CREATE ALBUM
+  ///
+  /// - `songIds`: ID di songs già esistenti da collegare all'album (in ordine di tracklist)
+  /// - `newSongs`: canzoni nuove da creare inline (AlbumSongInlineCreateDto),
+  ///               in coda rispetto a songIds, nell'ordine passato.
   Future<void> createAlbum({
     required String title,
     DateTime? releaseDate,
@@ -81,6 +85,7 @@ class AlbumViewModel extends _$AlbumViewModel {
     String? coverUrl,
     List<String> artistIds = const [],
     List<String> songIds = const [],
+    List<SongModel> newSongs = const [],
   }) async {
     state = const AsyncValue.loading();
 
@@ -93,6 +98,7 @@ class AlbumViewModel extends _$AlbumViewModel {
       coverUrl: coverUrl,
       artistIds: artistIds,
       songIds: songIds,
+      newSongs: newSongs,
       token: _token,
     );
 

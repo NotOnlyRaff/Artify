@@ -1,37 +1,37 @@
 import 'package:client/core/theme/app_pallete.dart';
-import 'package:client/core/utils.dart';
 import 'package:client/core/widgets/artify_section_title.dart';
 import 'package:client/features/home/admin/view/widgets/uploadAlbum/new_track_sheet.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
-import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// ───────────────────────────── MODEL LOCALI ─────────────────────────────
-/// Traccia definita dentro l’UploadAlbum.
-/// Non esiste ancora sul backend: verrà creata insieme all’album.
+
+/// Traccia locale dentro l'UploadAlbum.
+/// L'audio è rappresentato da una STRINGA songUrl (path/blob/url).
 class AlbumTrackLocal {
   final String localId;
   final String title;
   final String composer;
+  final String songUrl;
   final String? genre;
   final String? mood;
   final String? lyrics;
-  final PickedMedia audioFile;
 
-  /// Artisti (dal DB) collegati a questa traccia.
+  /// artist_ids (dal DB) che partecipano al brano
   final List<String> artistIds;
 
-  /// Ruolo per ogni artista (enum SongArtistRole come in UploadSongPage).
+  /// ruolo per ogni artista (stesso enum usato nel resto del progetto)
   final Map<String, SongArtistRole> artistRoles;
 
   AlbumTrackLocal({
     required this.localId,
     required this.title,
     required this.composer,
-    required this.audioFile,
+    required this.songUrl,
     this.genre,
     this.mood,
     this.lyrics,
@@ -40,50 +40,52 @@ class AlbumTrackLocal {
   });
 }
 
-/// Entry della tracklist dell’album:
-/// - o una SongModel esistente (dal catalogo)
-/// - o una traccia locale definita in questa pagina
+/// Entry generica della tracklist dell’album:
+/// - SongModel esistente (dal catalogo)
+/// - traccia locale (AlbumTrackLocal)
 class AlbumTrackEntry {
   final SongModel? existingSong;
-  final AlbumTrackLocal? localTrack;
+  final AlbumTrackLocal? local;
 
-  const AlbumTrackEntry.existing(this.existingSong) : localTrack = null;
-  const AlbumTrackEntry.local(this.localTrack) : existingSong = null;
+  const AlbumTrackEntry.existing(this.existingSong) : local = null;
+  const AlbumTrackEntry.local(this.local) : existingSong = null;
 
-  bool get isLocal => localTrack != null;
+  bool get isExisting => existingSong != null;
+  bool get isLocal => local != null;
 
-  String get displayTitle => existingSong?.songName ?? localTrack!.title;
+  String get displayTitle =>
+      existingSong?.songName ?? local?.title ?? 'Untitled track';
 
   String get displaySubtitle {
-    final String? genre = existingSong?.genre ?? localTrack?.genre;
-    if (genre != null && genre.trim().isNotEmpty) {
-      return genre;
+    if (existingSong != null) {
+      return existingSong!.genre ?? 'Unknown genre';
     }
-    return 'Unreleased track';
+    if (local != null &&
+        local!.genre != null &&
+        local!.genre!.trim().isNotEmpty) {
+      return local!.genre!;
+    }
+    return 'Local track';
   }
 
   String? get thumbnailUrl => existingSong?.thumbnailUrl;
-
-  /// Id reale solo per le song già esistenti (serve per song_ids)
-  String? get persistedSongId => existingSong?.id;
 }
 
 /// ───────────────────────────── TRACKS TAB ─────────────────────────────
 
 class TracksTab extends ConsumerWidget {
-  /// Tracklist dell’album (mista: song esistenti + locali)
   final List<AlbumTrackEntry> tracks;
 
-  /// Aggiunge una track esistente dal catalogo (Search library)
+  /// Aggiunge una track esistente dal catalogo
   final ValueChanged<SongModel> onAddExistingTrack;
 
-  /// Aggiunge una nuova traccia locale creata dal bottom sheet
+  /// Aggiunge una track locale (creata nel bottom sheet)
   final ValueChanged<AlbumTrackLocal> onAddLocalTrack;
 
   /// Rimuove qualunque entry (song esistente o locale)
   final ValueChanged<AlbumTrackEntry> onRemoveTrack;
 
-  /// Riordina tenendo conto dell’indice nella lista `tracks`
+  /// Riordina le entry
   final void Function(int fromIndex, int toIndex) onMoveTrack;
 
   // Search
@@ -116,6 +118,17 @@ class TracksTab extends ConsumerWidget {
         .map((t) => t.existingSong!.id)
         .toSet();
 
+    // DEBUG: stato della tracklist dentro il tab
+    debugPrint('[TracksTab] build – totalTracks=$totalTracks');
+    for (var i = 0; i < tracks.length; i++) {
+      final t = tracks[i];
+      debugPrint('[TracksTab] [TRACK $i] existing=${t.existingSong != null} '
+          'local=${t.local != null} '
+          'existingId=${t.existingSong?.id} '
+          'localId=${t.local?.localId} '
+          'title=${t.displayTitle}');
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -141,7 +154,7 @@ class TracksTab extends ConsumerWidget {
             Expanded(
               child: Text(
                 totalTracks == 0
-                    ? 'Start by creating a new track or linking existing songs from your catalog.'
+                    ? 'Start by creating a brand new song or linking existing tracks.'
                     : 'Reorder, remove or add more tracks. The order here defines the album sequence.',
                 style: GoogleFonts.plusJakartaSans(
                   color: Colors.white38,
@@ -152,9 +165,7 @@ class TracksTab extends ConsumerWidget {
             const SizedBox(width: 12),
             _NewTrackButton(
               onCreated: (localTrack) {
-                if (localTrack != null) {
-                  onAddLocalTrack(localTrack);
-                }
+                onAddLocalTrack(localTrack);
               },
             ),
           ],
@@ -175,6 +186,7 @@ class TracksTab extends ConsumerWidget {
           Column(
             children: List.generate(tracks.length, (index) {
               final entry = tracks[index];
+              final isLocal = entry.isLocal;
 
               return Container(
                 margin: const EdgeInsets.symmetric(vertical: 4),
@@ -186,7 +198,9 @@ class TracksTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                   color: Colors.white.withOpacity(0.03),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.12),
+                    color: isLocal
+                        ? Pallete.gradient2.withOpacity(0.5)
+                        : Colors.white.withOpacity(0.12),
                   ),
                 ),
                 child: Row(
@@ -234,15 +248,42 @@ class TracksTab extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            entry.displayTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.displayTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (isLocal) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    color: Pallete.gradient2.withOpacity(0.3),
+                                  ),
+                                  child: Text(
+                                    'Local',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -392,7 +433,8 @@ class TracksTab extends ConsumerWidget {
             data: (songs) {
               final filtered = songs
                   .where(
-                    (s) => s.songName.toLowerCase().contains(trimmedQuery),
+                    (s) =>
+                        s.songName.toLowerCase().contains(trimmedQuery),
                   )
                   .where(
                     (s) => !existingSongIds.contains(s.id),
@@ -481,10 +523,10 @@ class TracksTab extends ConsumerWidget {
   }
 }
 
-/// ───────────────────────── NEW TRACK BOTTOM SHEET ─────────────────────────
+/// ───────────────────────── NEW TRACK BUTTON ─────────────────────────
 
 class _NewTrackButton extends StatelessWidget {
-  final ValueChanged<AlbumTrackLocal?> onCreated;
+  final ValueChanged<AlbumTrackLocal> onCreated;
 
   const _NewTrackButton({
     required this.onCreated,
@@ -516,7 +558,13 @@ class _NewTrackButton extends StatelessWidget {
           },
         );
 
-        onCreated(localTrack);
+        if (localTrack != null) {
+          debugPrint('[TracksTab] _NewTrackButton -> got localTrack '
+              'localId=${localTrack.localId}, title=${localTrack.title}');
+          onCreated(localTrack);
+        } else {
+          debugPrint('[TracksTab] _NewTrackButton -> user cancelled');
+        }
       },
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

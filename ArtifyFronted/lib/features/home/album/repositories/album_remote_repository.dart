@@ -38,7 +38,7 @@ class AlbumRemoteRepository {
   //   "song_ids": ["..."]   // 👈 ID di Song già esistenti
   // }
 
-  Future<Either<AppFailure, AlbumModel>> createAlbum({
+Future<Object> createAlbum({
     required String title,
     DateTime? releaseDate,
     String? label,
@@ -51,61 +51,85 @@ class AlbumRemoteRepository {
     required String token,
   }) async {
     try {
-      final uri = _uri('/album');
+      // 🔹 Mappiamo i SongModel -> SongCreate (schema backend, snake_case)
+      final List<Map<String, dynamic>> newSongsPayload =
+          newSongs.map((song) {
+        // Estrai artist_ids e artist_roles da SongModel.artists
+        final artistIds = song.artists.map((sa) => sa.artistId).toList();
+        final artistRoles = <String, String>{
+          for (final sa in song.artists) sa.artistId: sa.role.name,
+        };
+
+        return {
+          'song_name': song.songName,
+          'song_url': song.songUrl,
+          'thumbnail_url': song.thumbnailUrl,
+          'release_date': song.releaseDate?.toIso8601String(),
+          'composer_name': song.composerName,
+          'producer_name': song.producerName,
+          'genre': song.genre,
+          'lyrics': song.lyrics,
+          'mood': song.mood,
+          'duration_seconds': null, // se non la calcoli lato FE
+
+          'artist_ids': artistIds,
+          'artist_roles': artistRoles,
+        };
+      }).toList();
 
       final body = <String, dynamic>{
-        'title': title.trim(),
+        'title': title,
+        'release_date': releaseDate?.toIso8601String(),
+        'label': label,
+        'album_type': albumType,
+        'genre': genre,
+        'cover_url': coverUrl,
         'artist_ids': artistIds,
         'song_ids': songIds,
-        'new_song': newSongs.map((e) => e.toJson()).toList(),
+
+        // 🔴 CHIAVE CORRETTA CHE VEDE Pydantic
+        'new_songs': newSongsPayload,
       };
 
-      if (releaseDate != null) {
-        body['release_date'] =
-            releaseDate.toIso8601String().split('T').first; // yyyy-MM-dd
-      }
-      if (label != null && label.trim().isNotEmpty) {
-        body['label'] = label.trim();
-      }
-      if (albumType != null && albumType.trim().isNotEmpty) {
-        body['album_type'] = albumType.trim();
-      }
-      if (genre != null && genre.trim().isNotEmpty) {
-        body['genre'] = genre.trim();
-      }
-      if (coverUrl != null && coverUrl.trim().isNotEmpty) {
-        body['cover_url'] = coverUrl.trim();
-      }
+      // DEBUG: logga il payload che stai per mandare
+      // così vedi chiaramente se new_songs arriva pieno o vuoto
+      // (questo è il log più importante adesso)
+      // ignore: avoid_print
+      print('==== [AlbumRemoteRepository] createAlbum BODY ====');
+      // ignore: avoid_print
+      print(const JsonEncoder.withIndent('  ').convert(body));
 
-      final res = await http.post(
+      final uri = _uri('/album');
+
+      final response = await http.post(
         uri,
-        headers: _jsonHeaders(token),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode(body),
       );
 
-      final dynamic resBody = jsonDecode(res.body);
+      // Debug anche della risposta
+      // ignore: avoid_print
+      print(
+          '[AlbumRemoteRepository] createAlbum status=${response.statusCode}');
+      // ignore: avoid_print
+      print('[AlbumRemoteRepository] response body=${response.body}');
 
-      if (res.statusCode != 201) {
-        if (resBody is Map<String, dynamic>) {
-          return Left(
-            AppFailure(
-              resBody['detail']?.toString() ?? 'Create album failed',
-            ),
-          );
-        }
-        return Left(AppFailure('Create album failed (${res.statusCode})'));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return Left(
+          Failure('Album create failed: ${response.body}'),
+        );
       }
 
-      if (resBody is! Map<String, dynamic>) {
-        return Left(AppFailure('Invalid response format for AlbumCreate'));
-      }
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      final album = AlbumModel.fromMap(json);
 
-      final album = AlbumModel.fromMap(
-        Map<String, dynamic>.from(resBody),
-      );
       return Right(album);
     } catch (e) {
-      return Left(AppFailure(e.toString()));
+      return Left(Failure(e.toString()));
     }
   }
 

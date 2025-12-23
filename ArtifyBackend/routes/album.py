@@ -151,7 +151,7 @@ def create_album(
             # TODO: se il tuo model Song ha un owner/user_id non nullable,
             #       valorizzalo qui usando auth_details.
             # es:
-            # user_id = auth_details["user_id"]
+            # user_id = auth_details["user_id"]d
         )
 
         db.add(new_song)

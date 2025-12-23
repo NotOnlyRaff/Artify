@@ -60,7 +60,7 @@ class SongArtistModel {
   final String? thumbnailUrl;
 
   /// Info ARTIST (se presenti nella risposta)
-  final String? artistId;
+  final String artistId;
   final String? artistName;
   final String? artistImageUrl;
 
@@ -69,7 +69,7 @@ class SongArtistModel {
     this.songId,
     this.songName,
     this.thumbnailUrl,
-    this.artistId,
+    required this.artistId,
     this.artistName,
     this.artistImageUrl,
   });
@@ -113,7 +113,7 @@ class SongArtistModel {
       songId: songId,
       songName: songName,
       thumbnailUrl: thumb,
-      artistId: artistId,
+      artistId: artistId!,
       artistName: artistName,
       artistImageUrl: artistImageUrl,
     );

@@ -1,9 +1,12 @@
 # routes/artist.py
 
+import mimetypes
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import cloudinary
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import UUID
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
@@ -21,9 +24,18 @@ router = APIRouter(
     tags=["artists"],
 )
 
+# TODO: in produzione spostare queste in variabili d'ambiente
+cloudinary.config(
+    cloud_name="dgjqxcl8u",
+    api_key="152778217772653",
+    api_secret="BscHrsDSpoGrKfEJhn2_X1WIolc",  # NON committare in produzione
+    secure=True,
+)
+
 # ---------- UTILITY ----------
 
-def _get_artist_or_404(artist_id: str, db: Session) -> Artist:
+def _get_artist_or_404(artist_id: uuid.UUID, db: Session) -> Artist:
+    artist_id = str(artist_id)
     artist = (
         db.query(Artist)
         .options(
@@ -58,7 +70,7 @@ def _resolve_songs(db: Session, song_ids: List[str]) -> List[Song]:
     response_model=ArtistOut,
 )
 def get_artist(
-    artist_id: str,
+    artist_id: uuid.UUID,
     db: Session = Depends(get_db),
     auth_details: dict = Depends(auth_middleware),
 ):
@@ -144,6 +156,45 @@ def _resolve_albums(db: Session, album_ids: List[str]) -> List[Album]:
             detail="Some album IDs do not exist",
         )
     return albums
+
+# ---------- UPLOAD ARTIST IMAGE ----------
+
+@router.post(
+    "/upload-image",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_artist_image(
+    image: UploadFile = File(...),
+    auth_details: dict = Depends(auth_middleware),
+):
+    content_type = image.content_type
+    guessed_type, _ = mimetypes.guess_type(image.filename or "")
+    is_image_type = (
+        (content_type and content_type.startswith("image/"))
+        or (guessed_type and guessed_type.startswith("image/"))
+        or content_type == "application/octet-stream"
+    )
+    if not is_image_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image file type",
+        )
+
+    image_id = str(uuid.uuid4())
+    try:
+        upload_res = cloudinary.uploader.upload(
+            image.file,
+            resource_type="image",
+            folder=f"artists/{image_id}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error uploading artist image: {e}",
+        )
+
+    return {"image_url": upload_res["url"]}
+
 
 # ---------- CREATE ARTIST ----------
 

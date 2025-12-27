@@ -13,6 +13,7 @@ import 'package:client/features/home/song/model/song_model.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class UploadAlbumPage extends ConsumerStatefulWidget {
@@ -121,8 +122,7 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
   void _addExistingTrack(SongModel song) {
     setState(() {
       // evita duplicati, tenendo conto che alcune entry possono essere "local"
-      final alreadyPresent =
-          _tracks.any((t) => t.existingSong?.id == song.id);
+      final alreadyPresent = _tracks.any((t) => t.existingSong?.id == song.id);
       if (alreadyPresent) return;
 
       _tracks.add(AlbumTrackEntry.existing(song));
@@ -134,8 +134,7 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
       _tracks.add(AlbumTrackEntry.local(track));
     });
 
-    debugPrint(
-        '[UploadAlbumPage] _addLocalTrack -> added local track '
+    debugPrint('[UploadAlbumPage] _addLocalTrack -> added local track '
         'localId=${track.localId}, title=${track.title}. '
         'Total tracks now: ${_tracks.length}');
   }
@@ -208,7 +207,7 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
     final bool hasAlbumGenre = genre.isNotEmpty;
     final String? albumGenreOrNull = hasAlbumGenre ? genre : null;
 
-final List<SongModel> newSongs = localEntries.map((entry) {
+    final List<SongModel> newSongs = localEntries.map((entry) {
       final track = entry.local!;
       final trackArtistIds =
           track.artistIds.isNotEmpty ? track.artistIds : artistIds;
@@ -222,11 +221,11 @@ final List<SongModel> newSongs = localEntries.map((entry) {
         );
       }).toList();
 
-
       final song = SongModel(
         id: 'local-${track.localId}', // id fittizio lato FE
         songName: track.title,
-        songUrl: track.songUrl,       // String (path/blob/url) come nel resto del progetto
+        songUrl:
+            track.songUrl, // String (path/blob/url) come nel resto del progetto
         thumbnailUrl: null,
         releaseDate: _releaseDate,
         composerName: track.composer,
@@ -234,9 +233,8 @@ final List<SongModel> newSongs = localEntries.map((entry) {
         genre: track.genre ?? albumGenreOrNull,
         lyrics: track.lyrics,
         mood: track.mood,
-        artists: songArtists,         // ✅ ora è List<SongArtistModel>, non List<String>
+        artists: songArtists, // ✅ ora è List<SongArtistModel>, non List<String>
       );
-      
 
       debugPrint('  -> mapped local track to SongModel '
           'id=${song.id}, name=${song.songName}, url=${song.songUrl}');
@@ -255,7 +253,20 @@ final List<SongModel> newSongs = localEntries.map((entry) {
       return;
     }
 
-    final String? coverUrl = null;
+    String? coverUrl;
+    if (_selectedCover != null) {
+      final coverRes = await ref
+          .read(albumViewModelProvider.notifier)
+          .uploadAlbumCover(cover: _selectedCover!);
+
+      switch (coverRes) {
+        case Left(value: final failure):
+          showSnackBar(context, failure.message);
+          return;
+        case Right(value: final uploadedUrl):
+          coverUrl = uploadedUrl;
+      }
+    }
 
     await ref.read(albumViewModelProvider.notifier).createAlbum(
           title: title,
@@ -269,8 +280,6 @@ final List<SongModel> newSongs = localEntries.map((entry) {
           newSongs: newSongs, // <-- deve esistere nel viewmodel / repository
         );
   }
-
-
 
   // ───────────── BUILD ─────────────
 

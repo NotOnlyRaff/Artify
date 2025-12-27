@@ -1,4 +1,6 @@
+import 'package:client/core/failure/failure.dart';
 import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/album/repositories/album_local_repository.dart';
 import 'package:client/features/home/album/repositories/album_remote_repository.dart';
@@ -71,11 +73,15 @@ class AlbumViewModel extends _$AlbumViewModel {
     return null;
   }
 
-  /// CREATE ALBUM
-  ///
-  /// - `songIds`: ID di songs già esistenti da collegare all'album (in ordine di tracklist)
-  /// - `newSongs`: canzoni nuove da creare inline (AlbumSongInlineCreateDto),
-  ///               in coda rispetto a songIds, nell'ordine passato.
+  Future<Either<AppFailure, String>> uploadAlbumCover({
+    required PickedMedia cover,
+  }) async {
+    return _remote.uploadAlbumCover(
+      cover: cover,
+      token: _token,
+    );
+  }
+
   Future<void> createAlbum({
     required String title,
     DateTime? releaseDate,

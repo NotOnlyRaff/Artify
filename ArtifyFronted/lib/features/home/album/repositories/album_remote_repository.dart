@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -23,22 +25,76 @@ class AlbumRemoteRepository {
         'x-auth-token': token,
       };
 
-  // ───────────────── CREATE ALBUM ─────────────────
-  //
-  // POST /album
-  // body = AlbumCreate:
-  // {
-  //   "title": "...",
-  //   "release_date": "YYYY-MM-DD" | null,
-  //   "label": "...",
-  //   "album_type": "album|single|ep|...",
-  //   "genre": "...",
-  //   "cover_url": "...",
-  //   "artist_ids": ["..."],
-  //   "song_ids": ["..."]   // 👈 ID di Song già esistenti
-  // }
+  Map<String, String> _authHeaders(String token) => {
+        'x-auth-token': token,
+      };
 
-Future<Object> createAlbum({
+  // ──────────────── UPLOAD ALBUM COVER ────────────────
+
+  Future<Either<AppFailure, String>> uploadAlbumCover({
+    required PickedMedia cover,
+    required String token,
+  }) async {
+    try {
+      final uri = _uri('/album/upload-cover');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.headers.addAll(_authHeaders(token));
+
+      if (kIsWeb) {
+        if (cover.bytes == null) {
+          return Left(AppFailure('Image bytes are null on Web'));
+        }
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'cover',
+            cover.bytes!,
+            filename: cover.name,
+          ),
+        );
+      } else {
+        if (cover.filePath == null) {
+          return Left(AppFailure('Image path is null on mobile'));
+        }
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'cover',
+            cover.filePath!,
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          return Left(
+            AppFailure(body['detail']?.toString() ?? 'Upload cover failed'),
+          );
+        }
+        return Left(
+          AppFailure('Upload cover failed (${response.statusCode})'),
+        );
+      }
+
+      final payload = jsonDecode(response.body);
+      if (payload is! Map<String, dynamic>) {
+        return Left(AppFailure('Invalid response for cover upload'));
+      }
+      final coverUrl = payload['cover_url']?.toString();
+      if (coverUrl == null || coverUrl.isEmpty) {
+        return Left(AppFailure('Cover URL missing in response'));
+      }
+
+      return Right(coverUrl);
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
+  }
+
+  Future<Either<AppFailure, AlbumModel>> createAlbum({
     required String title,
     DateTime? releaseDate,
     String? label,
@@ -52,9 +108,7 @@ Future<Object> createAlbum({
   }) async {
     try {
       // 🔹 Mappiamo i SongModel -> SongCreate (schema backend, snake_case)
-      final List<Map<String, dynamic>> newSongsPayload =
-          newSongs.map((song) {
-        // Estrai artist_ids e artist_roles da SongModel.artists
+      final List<Map<String, dynamic>> newSongsPayload = newSongs.map((song) {
         final artistIds = song.artists.map((sa) => sa.artistId).toList();
         final artistRoles = <String, String>{
           for (final sa in song.artists) sa.artistId: sa.role.name,
@@ -64,13 +118,14 @@ Future<Object> createAlbum({
           'song_name': song.songName,
           'song_url': song.songUrl,
           'thumbnail_url': song.thumbnailUrl,
-          'release_date': song.releaseDate?.toIso8601String(),
+          // meglio solo data, visto che il BE usa date
+          'release_date': song.releaseDate?.toIso8601String().split('T').first,
           'composer_name': song.composerName,
           'producer_name': song.producerName,
           'genre': song.genre,
           'lyrics': song.lyrics,
           'mood': song.mood,
-          'duration_seconds': null, // se non la calcoli lato FE
+          'duration_seconds': null,
 
           'artist_ids': artistIds,
           'artist_roles': artistRoles,
@@ -79,57 +134,71 @@ Future<Object> createAlbum({
 
       final body = <String, dynamic>{
         'title': title,
-        'release_date': releaseDate?.toIso8601String(),
+        'release_date': releaseDate?.toIso8601String().split('T').first,
         'label': label,
         'album_type': albumType,
         'genre': genre,
         'cover_url': coverUrl,
         'artist_ids': artistIds,
         'song_ids': songIds,
-
-        // 🔴 CHIAVE CORRETTA CHE VEDE Pydantic
         'new_songs': newSongsPayload,
       };
 
-      // DEBUG: logga il payload che stai per mandare
-      // così vedi chiaramente se new_songs arriva pieno o vuoto
-      // (questo è il log più importante adesso)
-      // ignore: avoid_print
       print('==== [AlbumRemoteRepository] createAlbum BODY ====');
-      // ignore: avoid_print
       print(const JsonEncoder.withIndent('  ').convert(body));
 
       final uri = _uri('/album');
 
+      // usa x-auth-token come tutti gli altri
+      final headers = _jsonHeaders(token);
+      headers['Authorization'] = 'Bearer $token';
+
       final response = await http.post(
         uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
         body: jsonEncode(body),
       );
 
-      // Debug anche della risposta
-      // ignore: avoid_print
       print(
           '[AlbumRemoteRepository] createAlbum status=${response.statusCode}');
-      // ignore: avoid_print
       print('[AlbumRemoteRepository] response body=${response.body}');
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        dynamic resBody;
+        try {
+          resBody = jsonDecode(response.body);
+        } catch (_) {
+          return Left(
+            AppFailure('Album create failed (${response.statusCode})'),
+          );
+        }
+
+        if (resBody is Map<String, dynamic>) {
+          return Left(
+            AppFailure(
+              resBody['detail']?.toString() ??
+                  'Album create failed (${response.statusCode})',
+            ),
+          );
+        }
+
         return Left(
-          Failure('Album create failed: ${response.body}'),
+          AppFailure('Album create failed (${response.statusCode})'),
         );
       }
 
-      final Map<String, dynamic> json =
-          jsonDecode(response.body) as Map<String, dynamic>;
-      final album = AlbumModel.fromMap(json);
+      final dynamic resBody = jsonDecode(response.body);
 
+      if (resBody is! Map<String, dynamic>) {
+        return Left(AppFailure('Invalid response format for AlbumOut'));
+      }
+
+      final album = AlbumModel.fromMap(
+        Map<String, dynamic>.from(resBody),
+      );
       return Right(album);
     } catch (e) {
-      return Left(Failure(e.toString()));
+      return Left(AppFailure(e.toString()));
     }
   }
 
@@ -249,8 +318,7 @@ Future<Object> createAlbum({
 
       if (title != null) body['title'] = title.trim();
       if (releaseDate != null) {
-        body['release_date'] =
-            releaseDate.toIso8601String().split('T').first;
+        body['release_date'] = releaseDate.toIso8601String().split('T').first;
       }
       if (label != null) body['label'] = label.trim();
       if (albumType != null) body['album_type'] = albumType.trim();

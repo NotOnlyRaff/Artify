@@ -80,8 +80,8 @@ class ArtistModel {
 
   factory ArtistModel.fromJson(Map<String, dynamic> json) {
     return ArtistModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       displayName: json['display_name'] as String?,
       slug: json['slug'] as String?,
       imageUrl: json['image_url'] == null

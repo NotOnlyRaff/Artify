@@ -9,6 +9,7 @@ import 'package:client/features/home/admin/view/widgets/uploadSong/upload_artwor
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class UploadArtistPage extends ConsumerStatefulWidget {
@@ -90,16 +91,26 @@ class _UploadArtistPageState extends ConsumerState<UploadArtistPage> {
 
     final slug = slugText.isEmpty ? _slugFromName(name) : slugText;
 
-    // TODO backend:
-    // selectedImage contiene il file scelto dal dispositivo.
-    // Quando aggiorni ArtistViewModel / repository, potrai passarlo lì,
-    // esattamente come fai per uploadSong.
+    String? imageUrl;
+    if (selectedImage != null) {
+      final imageRes = await ref
+          .read(artistViewModelProvider.notifier)
+          .uploadArtistImage(image: selectedImage!);
+
+      switch (imageRes) {
+        case Left(value: final failure):
+          showSnackBar(context, failure.message);
+          return;
+        case Right(value: final uploadedUrl):
+          imageUrl = uploadedUrl;
+      }
+    }
+
     await ref.read(artistViewModelProvider.notifier).createArtist(
           name: name,
           displayName: displayName.isEmpty ? null : displayName,
           slug: slug.isEmpty ? null : slug,
-          imageUrl:
-              null, // per ora nessuna URL: l'immagine è locale (selectedImage)
+          imageUrl: imageUrl,
           bio: bio.isEmpty ? null : bio,
           country: country.isEmpty ? null : country,
         );

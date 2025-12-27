@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -22,20 +24,74 @@ class ArtistRemoteRepository {
         'x-auth-token': token,
       };
 
-  // ───────────────── CREATE ARTIST ─────────────────
-  //
-  // POST /artist
-  // body (ArtistCreate):
-  // {
-  //   "name": "...",                 // required
-  //   "display_name": "...",
-  //   "slug": "...",
-  //   "image_url": "...",
-  //   "bio": "...",
-  //   "country": "...",
-  //   "song_ids": ["..."],
-  //   "album_ids": ["..."]
-  // }
+  Map<String, String> _authHeaders(String token) => {
+        'x-auth-token': token,
+      };
+
+  // ──────────────── UPLOAD ARTIST IMAGE ────────────────
+
+  Future<Either<AppFailure, String>> uploadArtistImage({
+    required PickedMedia image,
+    required String token,
+  }) async {
+    try {
+      final uri = _uri('/artist/upload-image');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.headers.addAll(_authHeaders(token));
+
+      if (kIsWeb) {
+        if (image.bytes == null) {
+          return Left(AppFailure('Image bytes are null on Web'));
+        }
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'image',
+            image.bytes!,
+            filename: image.name,
+          ),
+        );
+      } else {
+        if (image.filePath == null) {
+          return Left(AppFailure('Image path is null on mobile'));
+        }
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'image',
+            image.filePath!,
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          return Left(
+            AppFailure(body['detail']?.toString() ?? 'Upload image failed'),
+          );
+        }
+        return Left(
+          AppFailure('Upload image failed (${response.statusCode})'),
+        );
+      }
+
+      final payload = jsonDecode(response.body);
+      if (payload is! Map<String, dynamic>) {
+        return Left(AppFailure('Invalid response for image upload'));
+      }
+      final imageUrl = payload['image_url']?.toString();
+      if (imageUrl == null || imageUrl.isEmpty) {
+        return Left(AppFailure('Image URL missing in response'));
+      }
+
+      return Right(imageUrl);
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
+  }
 
   Future<Either<AppFailure, ArtistModel>> createArtist({
     required String name,

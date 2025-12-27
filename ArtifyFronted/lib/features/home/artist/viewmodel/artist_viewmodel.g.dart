@@ -394,7 +394,7 @@ class _GetArtistProviderElement
   String get artistId => (origin as GetArtistProvider).artistId;
 }
 
-String _$artistViewModelHash() => r'fb81501949e09ca028be5ce47af9f06b351f4114';
+String _$artistViewModelHash() => r'b78ee909f456f3cbfd379e23c5aa1fb76998e145';
 
 /// ───────────────── VIEWMODEL: OPERAZIONI MUTABILI ───────────
 ///

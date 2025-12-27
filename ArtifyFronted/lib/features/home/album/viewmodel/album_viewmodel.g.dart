@@ -349,7 +349,7 @@ class _GetAlbumProviderElement
   String get albumId => (origin as GetAlbumProvider).albumId;
 }
 
-String _$albumViewModelHash() => r'db412ed9ee948490a2982b97300c74c8b706fe51';
+String _$albumViewModelHash() => r'95647de89dcb7a88b85a19fe739fdab2ce0a15cb';
 
 /// ───────────────── VIEWMODEL MUTAZIONI ALBUM ─────────────
 ///

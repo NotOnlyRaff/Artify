@@ -1,4 +1,6 @@
+import 'package:client/core/failure/failure.dart';
 import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/artist/repositories/artist_local_repository.dart';
 import 'package:client/features/home/artist/repositories/artist_remote_repository.dart';
@@ -95,6 +97,16 @@ class ArtistViewModel extends _$ArtistViewModel {
   AsyncValue? build() {
     // stato iniziale: nessuna operazione in corso
     return null;
+  }
+
+  Future<Either<AppFailure, String>> uploadArtistImage({
+    required PickedMedia image,
+  }) async {
+    final token = ref.read(currentUserNotifierProvider)!.token;
+    return _remoteRepo.uploadArtistImage(
+      image: image,
+      token: token,
+    );
   }
 
   // ───────────────── CREATE ARTIST ─────────────────

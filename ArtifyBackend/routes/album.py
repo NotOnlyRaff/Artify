@@ -1,12 +1,16 @@
 # routes/album.py
 
+import mimetypes
 import uuid
 from typing import List, Optional
 
+import cloudinary
 from fastapi import (
     APIRouter,
     Depends,
+    File,
     HTTPException,
+    UploadFile,
     status,
 )
 from sqlalchemy.orm import Session, joinedload
@@ -20,6 +24,7 @@ from models.song import Song
 from models.albumArtist import AlbumArtist      # join album–artist
 from models.albumSong import AlbumSong          # join album–song
 
+from models.songArtist import SongArtist, SongArtistRole
 from schemas.album import (
     AlbumCreate,
     AlbumUpdate,
@@ -27,6 +32,14 @@ from schemas.album import (
 )
 
 router = APIRouter(tags=["albums"])
+
+cloudinary.config(
+    cloud_name="dgjqxcl8u",
+    api_key="152778217772653",
+    api_secret="BscHrsDSpoGrKfEJhn2_X1WIolc",  # NON committare in produzione
+    secure=True,
+)
+
 
 
 # ---------- UTILITY INTERNA ----------
@@ -94,7 +107,45 @@ def _resolve_songs(
     return songs
 
 
-# routes/album.py (solo create_album aggiornato)
+# ---------- UPLOAD COVER ----------
+
+@router.post(
+    "/upload-cover",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_album_cover(
+    cover: UploadFile = File(...),
+    auth_details: dict = Depends(auth_middleware),
+):
+    content_type = cover.content_type
+    guessed_type, _ = mimetypes.guess_type(cover.filename or "")
+    is_image_type = (
+        (content_type and content_type.startswith("image/"))
+        or (guessed_type and guessed_type.startswith("image/"))
+        or content_type == "application/octet-stream"
+    )
+    if not is_image_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image file type",
+        )
+
+    cover_id = str(uuid.uuid4())
+    try:
+        upload_res = cloudinary.uploader.upload(
+            cover.file,
+            resource_type="image",
+            folder=f"albums/{cover_id}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error uploading cover image: {e}",
+        )
+
+    return {"cover_url": upload_res["url"]}
+
+
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
@@ -155,21 +206,26 @@ def create_album(
         )
 
         db.add(new_song)
+        db.flush()
         new_song_entities.append(new_song)
 
-        # TODO (facoltativo, se hai una tabella SongArtist):
-        # - collega track.artist_ids alla nuova Song
-        #   from models.songArtist import SongArtist
-        #   song_artists = _resolve_artists(db, track.artist_ids)
-        #   for artist in song_artists:
-        #       db.add(
-        #           SongArtist(
-        #               id=str(uuid.uuid4()),
-        #               song_id=song_id,
-        #               artist_id=artist.id,
-        #               role=None,  # oppure una logica di ruolo
-        #           )
-        #       )
+        artist_ids = track.artist_ids or payload.artist_ids
+
+        if artist_ids:
+            song_artists = _resolve_artists(db, artist_ids)
+            for artist in song_artists:
+                role = track.artist_roles.get(
+                    artist.id,
+                    SongArtistRole.PRIMARY,
+                )
+                db.add(
+                    SongArtist(
+                        id=str(uuid.uuid4()),
+                        song=new_song,
+                        artist=artist,
+                        role=role,
+                    )
+                )
 
     # ---------- UNISCI TUTTE LE SONG IN ORDINE ----------
     all_songs_in_order: List[Song] = ordered_existing_songs + new_song_entities
@@ -213,6 +269,7 @@ def create_album(
     ]
 
     db.add(db_album)
+    
     db.commit()
     print("[create_album] COMMIT OK, album_id:", album_id)
 
@@ -361,28 +418,28 @@ def update_album(
 
 # ---------- DELETE ALBUM ----------
 
-@router.delete(
-    "/{album_id}",
-    status_code=status.HTTP_200_OK,
-)
+@router.delete("/{album_id}", status_code=status.HTTP_200_OK)
 def delete_album(
     album_id: str,
     db: Session = Depends(get_db),
     auth_details: dict = Depends(auth_middleware),
 ):
     """
-    Cancella un album.
-
-    Le join AlbumArtist / AlbumSong vengono eliminate grazie a
+    Cancella un album insieme a tutte le canzoni collegate e le relazioni.
+    
+    Le join AlbumArtist, AlbumSong e le canzoni collegate vengono eliminate grazie a
     ondelete="CASCADE" + cascade="all, delete-orphan".
     """
     album = db.query(Album).filter(Album.id == album_id).first()
+
     if not album:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Album not found",
         )
 
+    # Cancellazione dell'album e delle entità collegate (canzoni, artisti, etc.)
     db.delete(album)
     db.commit()
-    return {"message": "Album deleted successfully"}
+
+    return {"message": "Album and related entities deleted successfully"}

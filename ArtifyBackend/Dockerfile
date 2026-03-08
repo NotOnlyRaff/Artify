@@ -1,18 +1,13 @@
-# Usa un'immagine Python leggera
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Crea e imposta la directory di lavoro
 WORKDIR /app
 
-# Copia i file del progetto
-COPY . /app
+COPY requirements.txt .
 
-# Installa le dipendenze
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Esponi la porta usata da FastAPI
-EXPOSE 8080
+COPY . .
 
-# Avvia l'app con FastAPI standard (che internamente usa Uvicorn)
-CMD ["sh", "-c", "uvicorn main:app --port 8080 --host 0.0.0.0"]
+EXPOSE 8000
 
+CMD ["fastapi", "run", "main.py", "--host", "0.0.0.0", "--port", "8000"]

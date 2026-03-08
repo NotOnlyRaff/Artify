@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.git/
+.idea/
+.vscode/
+pytest_cache/
+mypy_cache/
+dist/
+build/
+*.rar

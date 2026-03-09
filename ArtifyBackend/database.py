@@ -3,7 +3,7 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from google.cloud.sql.connector import Connector
 
-DATABASE_URL = 'postgresql://postgres:Password123@localhost:5432/Artify'
+DATABASE_URL = 'postgresql://postgres:Password123@db:5432/Artify'
 
 
 engine = create_engine(DATABASE_URL)

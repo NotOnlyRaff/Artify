@@ -35,6 +35,9 @@ class AuthRemoteRepository {
           },
         ),
       );
+      print('STATUS: ${response.statusCode}');
+      print('BODY: ${response.body}');
+      print('HEADERS: ${response.headers}');
       final resBodyMap = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode != 201) {
@@ -45,6 +48,7 @@ class AuthRemoteRepository {
       }
 
       final resBodyMapD = resBodyMap;
+      print(resBodyMapD);
       return Right(UserModel.fromMap(resBodyMapD));
     } catch (e) {
       return Left(AppFailure(e.toString()));
@@ -70,6 +74,9 @@ class AuthRemoteRepository {
           },
         ),
       );
+      print('LOGIN STATUS: ${response.statusCode}');
+      print('LOGIN BODY: ${response.body}');
+      print('LOGIN HEADERS: ${response.headers}');
       final resBodyMap = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode != 200) {

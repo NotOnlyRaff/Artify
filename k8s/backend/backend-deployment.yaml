@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artify-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: artify-backend
+  template:
+    metadata:
+      labels:
+        app: artify-backend
+    spec:
+      containers:
+        - name: artify-backend
+          image: artify-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:Password123@db:5432/Artify"

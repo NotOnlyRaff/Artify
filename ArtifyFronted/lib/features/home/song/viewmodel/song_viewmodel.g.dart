@@ -21,6 +21,8 @@ final getAllSongsProvider = AutoDisposeFutureProvider<List<SongModel>>.internal(
   allTransitiveDependencies: null,
 );
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 typedef GetAllSongsRef = AutoDisposeFutureProviderRef<List<SongModel>>;
 String _$getFavSongsHash() => r'1a1a2e2639697f44ecb45b503938ca1d168e4c18';
 
@@ -35,8 +37,10 @@ final getFavSongsProvider = AutoDisposeFutureProvider<List<SongModel>>.internal(
   allTransitiveDependencies: null,
 );
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 typedef GetFavSongsRef = AutoDisposeFutureProviderRef<List<SongModel>>;
-String _$songViewModelHash() => r'b542968ca842c7de02453b91796e4c1f3d1d1fa9';
+String _$songViewModelHash() => r'45e4ebd8ae864c020bbc48cff642978cd24a3e8f';
 
 /// ───────────────── VIEWMODEL CANZONI ─────────────────
 /// Gestisce:
@@ -60,4 +64,4 @@ final songViewModelProvider =
 
 typedef _$SongViewModel = AutoDisposeNotifier<AsyncValue?>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

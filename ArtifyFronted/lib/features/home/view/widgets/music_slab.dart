@@ -1,7 +1,7 @@
 import 'dart:ui';
 
-import 'package:client/core/providers/current_song_notifier.dart';
-import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/features/home/song/providers/current_song_notifier.dart';
+import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/features/home/models/fav_song_model.dart';
 import 'package:client/features/home/models/song_artist_model.dart';

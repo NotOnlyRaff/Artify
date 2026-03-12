@@ -7,6 +7,7 @@ import 'package:client/features/home/song/model/song_model.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart'; // IMPORTANTE: Necessario per definire il MediaType
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'song_remote_repository.g.dart';
@@ -55,8 +56,7 @@ class SongRemoteRepository {
       request.fields['composer_name'] = composerName.trim();
 
       // release_date: FastAPI si aspetta una date (YYYY-MM-DD)
-      final releaseDateStr =
-          releaseDate.toIso8601String().split('T').first; // yyyy-MM-dd
+      final releaseDateStr = releaseDate.toIso8601String().split('T').first;
       request.fields['release_date'] = releaseDateStr;
 
       if (producerName != null && producerName.trim().isNotEmpty) {
@@ -72,7 +72,7 @@ class SongRemoteRepository {
         request.fields['mood'] = mood.trim();
       }
 
-      // 👇 nuovo: JSON con gli artist id
+      // JSON con gli artist id
       if (artistIds.isNotEmpty) {
         request.fields['artist_ids_json'] = jsonEncode(artistIds);
       }
@@ -87,6 +87,7 @@ class SongRemoteRepository {
             'song', // ⚠️ deve chiamarsi "song" come nel BE
             selectedAudio.bytes!,
             filename: selectedAudio.name,
+            contentType: MediaType('audio', 'mpeg'), // ⚠️ FIX PER L'ERRORE 400
           ),
         );
       } else {
@@ -97,6 +98,7 @@ class SongRemoteRepository {
           await http.MultipartFile.fromPath(
             'song', // ⚠️ deve chiamarsi "song"
             selectedAudio.filePath!,
+            contentType: MediaType('audio', 'mpeg'), // ⚠️ FIX PER L'ERRORE 400
           ),
         );
       }
@@ -111,6 +113,8 @@ class SongRemoteRepository {
             'thumbnail', // ⚠️ deve chiamarsi "thumbnail"
             selectedThumbnail.bytes!,
             filename: selectedThumbnail.name,
+            contentType:
+                MediaType('image', 'jpeg'), // Forziamo il tipo immagine
           ),
         );
       } else {
@@ -121,6 +125,8 @@ class SongRemoteRepository {
           await http.MultipartFile.fromPath(
             'thumbnail',
             selectedThumbnail.filePath!,
+            contentType:
+                MediaType('image', 'jpeg'), // Forziamo il tipo immagine
           ),
         );
       }

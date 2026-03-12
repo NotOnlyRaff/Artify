@@ -15,11 +15,11 @@ class AppTheme {
   static ThemeData get darkThemeMode {
     final base = ThemeData.dark(useMaterial3: true);
 
-    final textTheme = GoogleFonts.plusJakartaSansTextTheme(base.textTheme)
-        .apply(
-          bodyColor: Pallete.whiteColor,
-          displayColor: Pallete.whiteColor,
-        );
+    final textTheme =
+        GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
+      bodyColor: Pallete.whiteColor,
+      displayColor: Pallete.whiteColor,
+    );
 
     return base.copyWith(
       // lascio lo sfondo trasparente: dietro ci sarà SpaceBackground
@@ -30,7 +30,7 @@ class AppTheme {
         brightness: Brightness.dark,
         primary: Pallete.primary,
         secondary: Pallete.accentCyan,
-        surface: Pallete.surfacePrimary,
+        surface: Pallete.surfaceSecondary,
         background: Pallete.backgroundColor,
         error: Pallete.errorColor,
       ),
@@ -85,7 +85,8 @@ class AppTheme {
       ),
 
       inputDecorationTheme: InputDecorationTheme(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         filled: true,
         fillColor: Pallete.surfaceSecondary.withOpacity(0.9),
         enabledBorder: _border(Pallete.borderColor),

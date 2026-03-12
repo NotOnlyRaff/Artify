@@ -2,10 +2,10 @@
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.album import SongRef   # id, song_name, thumbnail_url
-from schemas.song import AlbumRef   # id, title, cover_url
+from schemas.album_schema import SongRef   # id, song_name, thumbnail_url
+from schemas.song_schema import AlbumRef   # id, title, cover_url
 
 
 class ArtistBase(BaseModel):
@@ -50,10 +50,10 @@ class ArtistOut(ArtistBase):
     Rappresentazione pubblica di un artista verso il FE.
     """
     id: str
+    user_id: Optional[str] = None
 
     # liste derivate dalle relazioni Artist.songs e Artist.albums
     songs: List[SongRef] = Field(default_factory=list)
     albums: List[AlbumRef] = Field(default_factory=list)
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

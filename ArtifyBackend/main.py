@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from models.base import Base
-from routes import artist, auth, song, album, songArtist
+from routes import album_route, artist_route, auth_route, song_route, songArtist_route
 from database import engine
 
 app = FastAPI()
@@ -21,9 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/auth")
-app.include_router(song.router, prefix="/song")
-app.include_router(album.router, prefix="/album")
-app.include_router(artist.router, prefix="/artist")
-app.include_router(songArtist.router, prefix="/song-artist")
+app.include_router(auth_route.router, prefix="/auth")
+app.include_router(song_route.router, prefix="/song")
+app.include_router(album_route.router, prefix="/album")
+app.include_router(artist_route.router, prefix="/artist")
+app.include_router(songArtist_route.router, prefix="/song-artist")
 Base.metadata.create_all(engine)

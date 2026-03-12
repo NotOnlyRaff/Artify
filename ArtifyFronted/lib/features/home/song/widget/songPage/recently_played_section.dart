@@ -1,6 +1,6 @@
 // lib/features/home/song/view/widgets/recently_played_section.dart
 
-import 'package:client/core/providers/current_song_notifier.dart';
+import 'package:client/features/home/song/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/widget/SongPage/song_artist_formatter.dart';

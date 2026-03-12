@@ -3,9 +3,9 @@
 from datetime import date
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from models.song import Song
-from schemas.song import ArtistRef, SongCreate   # id, name, display_name, image_url
+from schemas.song_schema import ArtistRef, SongCreate   # id, name, display_name, image_url
 
 
 class SongRef(BaseModel):
@@ -16,8 +16,7 @@ class SongRef(BaseModel):
     song_name: str
     thumbnail_url: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AlbumBase(BaseModel):
@@ -73,5 +72,5 @@ class AlbumOut(AlbumBase):
     artists: List[ArtistRef] = Field(default_factory=list)
     songs: List[SongRef] = Field(default_factory=list)
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+

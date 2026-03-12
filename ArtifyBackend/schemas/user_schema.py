@@ -1,10 +1,11 @@
 # pydantic_schemas/user.py
 
-from typing import List
+from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from schemas.album import SongRef  # ref minimale: id, song_name, thumbnail_url
+from models.user import UserRole
+from schemas.album_schema import SongRef  # ref minimale: id, song_name, thumbnail_url
 
 
 class UserBase(BaseModel):
@@ -23,6 +24,7 @@ class UserCreate(UserBase):
     verrà hashata nel service prima di creare l'User SQLAlchemy.
     """
     password: str
+    is_artist: bool = False
 
 
 class UserLogin(BaseModel):
@@ -39,9 +41,11 @@ class UserOut(UserBase):
     Non espone mai la password.
     """
     id: str
+    role: UserRole
+
+    artist_id: Optional[str] = None
 
     # lista delle canzoni preferite (via relazione User.favorite_songs)
     favorite_songs: List[SongRef] = Field(default_factory=list)
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

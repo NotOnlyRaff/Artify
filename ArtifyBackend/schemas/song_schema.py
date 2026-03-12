@@ -3,9 +3,9 @@
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from models.songArtist import SongArtistRole
-from schemas.songArtist import SongArtistOut
+from schemas.songArtist_schema import SongArtistOut
 
 
 # --- REF MINIMALI USATI DA ALBUM E SONG ---
@@ -20,8 +20,7 @@ class ArtistRef(BaseModel):
     display_name: Optional[str] = None
     image_url: Optional[str] = None
 
-    class Config:
-        orm_mode = True   # ok, warning ma funziona anche in v2
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AlbumRef(BaseModel):
@@ -32,8 +31,7 @@ class AlbumRef(BaseModel):
     title: str
     cover_url: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- BASE / CREATE / UPDATE ---
@@ -104,5 +102,8 @@ class SongOut(BaseModel):
     artists: List[ArtistRef] = Field(default_factory=list)
     albums: List[AlbumRef] = Field(default_factory=list)
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(  
+        from_attributes=True, 
+        use_enum_values=True,
+        populate_by_name=True # Permette di usare sia l'alias che il nome del campo
+    )

@@ -178,6 +178,8 @@ class GetAllAlbumsProvider extends AutoDisposeFutureProvider<List<AlbumModel>> {
   }
 }
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 mixin GetAllAlbumsRef on AutoDisposeFutureProviderRef<List<AlbumModel>> {
   /// The parameter `artistId` of this provider.
   String? get artistId;
@@ -336,6 +338,8 @@ class GetAlbumProvider extends AutoDisposeFutureProvider<AlbumModel> {
   }
 }
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 mixin GetAlbumRef on AutoDisposeFutureProviderRef<AlbumModel> {
   /// The parameter `albumId` of this provider.
   String get albumId;
@@ -368,4 +372,4 @@ final albumViewModelProvider =
 
 typedef _$AlbumViewModel = AutoDisposeNotifier<AsyncValue?>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

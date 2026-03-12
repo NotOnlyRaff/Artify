@@ -1,7 +1,7 @@
 import 'dart:ui';
 
-import 'package:client/core/providers/current_song_notifier.dart';
-import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/features/home/song/providers/current_song_notifier.dart';
+import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/features/home/models/fav_song_model.dart';
 import 'package:client/features/home/models/song_artist_model.dart';
@@ -132,8 +132,7 @@ class MusicPlayer extends ConsumerWidget {
                       children: [
                         IconButton(
                           onPressed: () {
-                            debugPrint(
-                                '[MusicPlayer] close pressed – popping');
+                            debugPrint('[MusicPlayer] close pressed – popping');
                             Navigator.pop(context);
                           },
                           icon: const Icon(
@@ -314,8 +313,7 @@ class MusicPlayer extends ConsumerWidget {
                             StreamBuilder<Duration>(
                               stream: player.positionStream,
                               builder: (context, snapshot) {
-                                final position =
-                                    snapshot.data ?? Duration.zero;
+                                final position = snapshot.data ?? Duration.zero;
                                 final duration = player.duration;
 
                                 double sliderValue = 0.0;
@@ -333,8 +331,7 @@ class MusicPlayer extends ConsumerWidget {
                                 return Column(
                                   children: [
                                     SliderTheme(
-                                      data:
-                                          SliderTheme.of(context).copyWith(
+                                      data: SliderTheme.of(context).copyWith(
                                         activeTrackColor: Colors.white,
                                         inactiveTrackColor: Colors.white12,
                                         thumbColor: Colors.white,
@@ -430,8 +427,7 @@ class MusicPlayer extends ConsumerWidget {
                                         );
                                       },
                                       icon: const Icon(
-                                        CupertinoIcons
-                                            .backward_end_alt_fill,
+                                        CupertinoIcons.backward_end_alt_fill,
                                         color: Colors.white,
                                         size: 26,
                                       ),

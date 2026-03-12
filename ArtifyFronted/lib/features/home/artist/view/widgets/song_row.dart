@@ -1,4 +1,4 @@
-import 'package:client/core/providers/current_song_notifier.dart';
+import 'package:client/features/home/song/providers/current_song_notifier.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';

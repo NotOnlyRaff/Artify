@@ -9,19 +9,30 @@ AuthLocalRepository authLocalRepository(AuthLocalRepositoryRef ref) {
 }
 
 class AuthLocalRepository {
-  late SharedPreferences _sharedPreferences;
+  SharedPreferences? _sharedPreferences;
 
   Future<void> init() async {
-    _sharedPreferences = await SharedPreferences.getInstance();
+    _sharedPreferences ??= await SharedPreferences.getInstance();
   }
 
-  void setToken(String? token) {
-    if (token != null) {
-      _sharedPreferences.setString('x-auth-token', token);
+  Future<void> setToken(String? token) async {
+    await init();
+
+    if (token == null) {
+      await _sharedPreferences!.remove('x-auth-token');
+      return;
     }
+
+    await _sharedPreferences!.setString('x-auth-token', token);
   }
 
-  String? getToken() {
-    return _sharedPreferences.getString('x-auth-token');
+  Future<String?> getToken() async {
+    await init();
+    return _sharedPreferences!.getString('x-auth-token');
+  }
+
+  Future<void> removeToken() async {
+    await init();
+    await _sharedPreferences!.remove('x-auth-token');
   }
 }

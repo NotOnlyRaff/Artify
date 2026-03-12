@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
+import 'package:client/core/network/http_client_provider.dart';
 import 'package:client/features/auth/models/user_model.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
@@ -10,42 +11,45 @@ part 'auth_remote_repository.g.dart';
 
 @riverpod
 AuthRemoteRepository authRemoteRepository(AuthRemoteRepositoryRef ref) {
-  return AuthRemoteRepository();
+  final client = ref.watch(httpClientProvider);
+  return AuthRemoteRepository(client);
 }
 
 class AuthRemoteRepository {
+  final http.Client client;
+
+  AuthRemoteRepository(this.client);
+
   Future<Either<AppFailure, UserModel>> signup({
     required String name,
     required String email,
     required String password,
+    required bool isArtist,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse(
-          '${ServerConstant.serverURL}/auth/signup',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(
-          {
-            'name': name,
-            'email': email,
-            'password': password,
-          },
-        ),
+      final response = await client.post(
+        Uri.parse('${ServerConstant.serverURL}/auth/signup'),
+        body: jsonEncode({
+          'name': name,
+          'email': email,
+          'password': password,
+          'is_artist': isArtist,
+        }),
       );
+
+      if (response.body.trim().isEmpty) {
+        return Left(
+          AppFailure('Empty response body. Status: ${response.statusCode}'),
+        );
+      }
+
       final resBodyMap = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode != 201) {
-        if (resBodyMap['detail'] != null) {
-          return Left(AppFailure(_extractErrorMessage(resBodyMap)));
-        }
-        return Left(AppFailure(response.body));
+        return Left(AppFailure(_extractErrorMessage(resBodyMap)));
       }
 
-      final resBodyMapD = resBodyMap;
-      return Right(UserModel.fromMap(resBodyMapD));
+      return Right(UserModel.fromMap(resBodyMap));
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
@@ -56,29 +60,29 @@ class AuthRemoteRepository {
     required String password,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse(
-          '${ServerConstant.serverURL}/auth/login',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(
-          {
-            'email': email,
-            'password': password,
-          },
-        ),
+      final response = await client.post(
+        Uri.parse('${ServerConstant.serverURL}/auth/login'),
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
       );
+
+      if (response.body.trim().isEmpty) {
+        return Left(
+          AppFailure('Empty response body. Status: ${response.statusCode}'),
+        );
+      }
+
       final resBodyMap = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode != 200) {
-        return Left(AppFailure(resBodyMap['detail']));
+        return Left(AppFailure(_extractErrorMessage(resBodyMap)));
       }
 
       return Right(
         UserModel.fromMap(resBodyMap['user']).copyWith(
-          token: resBodyMap['token'],
+          token: resBodyMap['token']?.toString() ?? '',
         ),
       );
     } catch (e) {
@@ -88,19 +92,20 @@ class AuthRemoteRepository {
 
   Future<Either<AppFailure, UserModel>> getCurrentUserData(String token) async {
     try {
-      final response = await http.get(
-        Uri.parse(
-          '${ServerConstant.serverURL}/auth/',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': token,
-        },
+      final response = await client.get(
+        Uri.parse('${ServerConstant.serverURL}/auth/'),
       );
+
+      if (response.body.trim().isEmpty) {
+        return Left(
+          AppFailure('Empty response body. Status: ${response.statusCode}'),
+        );
+      }
+
       final resBodyMap = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode != 200) {
-        return Left(AppFailure(resBodyMap['detail']));
+        return Left(AppFailure(_extractErrorMessage(resBodyMap)));
       }
 
       return Right(
@@ -116,23 +121,20 @@ class AuthRemoteRepository {
   String _extractErrorMessage(Map<String, dynamic> resBodyMap) {
     final detail = resBodyMap['detail'];
 
-    if (detail is String) {
-      return detail;
-    }
+    if (detail is String) return detail;
 
-    // Caso tipico FastAPI: [{"loc": [...], "msg": "...", "type": "..."}]
     if (detail is List && detail.isNotEmpty) {
       final first = detail.first;
-      if (first is Map && first['msg'] is String) {
-        return first['msg'] as String;
+      if (first is Map && first['msg'] != null) {
+        return first['msg'].toString();
       }
       return detail.toString();
     }
 
-    if (detail is Map && detail['msg'] is String) {
-      return detail['msg'] as String;
+    if (detail is Map && detail['msg'] != null) {
+      return detail['msg'].toString();
     }
 
-    return detail?.toString() ?? 'Unknown error';
+    return 'Errore del server';
   }
 }

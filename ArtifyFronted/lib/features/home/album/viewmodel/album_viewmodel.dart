@@ -1,5 +1,5 @@
 import 'package:client/core/failure/failure.dart';
-import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/album/repositories/album_local_repository.dart';

@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # ATTENZIONE: usa il path reale del tuo file model
 # se il file è models/song_artist.py:
@@ -23,8 +23,7 @@ class ArtistRef(BaseModel):
     display_name: Optional[str] = None
     image_url: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SongRef(BaseModel):
@@ -36,8 +35,7 @@ class SongRef(BaseModel):
     song_name: str
     thumbnail_url: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------- BASE / CREATE / UPDATE ----------
@@ -47,9 +45,7 @@ class SongArtistBase(BaseModel):
     artist_id: str
     role: SongArtistRole = SongArtistRole.PRIMARY
 
-    class Config:
-        # quando serializzi, invia "primary", "featured", ecc.
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class SongArtistCreate(SongArtistBase):
@@ -65,8 +61,7 @@ class SongArtistUpdate(BaseModel):
     """
     role: SongArtistRole
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 # ---------- OUTPUT ----------
@@ -80,6 +75,7 @@ class SongArtistOut(BaseModel):
     song: SongRef
     artist: ArtistRef
 
-    class Config:
-        orm_mode = True          # legge direttamente da oggetto ORM
-        use_enum_values = True   # "primary" / "featured" / ...
+    model_config = ConfigDict(
+        from_attributes=True, 
+        use_enum_values=True
+    )

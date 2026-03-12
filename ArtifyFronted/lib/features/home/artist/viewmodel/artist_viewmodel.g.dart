@@ -213,6 +213,8 @@ class GetArtistsProvider extends AutoDisposeFutureProvider<List<ArtistModel>> {
   }
 }
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 mixin GetArtistsRef on AutoDisposeFutureProviderRef<List<ArtistModel>> {
   /// The parameter `search` of this provider.
   String? get search;
@@ -381,6 +383,8 @@ class GetArtistProvider extends AutoDisposeFutureProvider<ArtistModel> {
   }
 }
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 mixin GetArtistRef on AutoDisposeFutureProviderRef<ArtistModel> {
   /// The parameter `artistId` of this provider.
   String get artistId;
@@ -421,4 +425,4 @@ final artistViewModelProvider =
 
 typedef _$ArtistViewModel = AutoDisposeNotifier<AsyncValue?>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

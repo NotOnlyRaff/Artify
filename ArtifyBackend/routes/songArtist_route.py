@@ -14,7 +14,7 @@ from models.songArtist import SongArtist, SongArtistRole  # 👈 aggiorna il pat
 from models.song import Song
 from models.artist import Artist
 
-from schemas.songArtist import (
+from schemas.songArtist_schema import (
     SongArtistCreate,
     SongArtistUpdate,
     SongArtistOut,

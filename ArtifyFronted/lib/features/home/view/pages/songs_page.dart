@@ -1,6 +1,6 @@
 // lib/features/home/song/view/pages/songs_page.dart
 
-import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:client/features/home/song/widget/songPage/latest_today_section.dart';
 import 'package:client/features/home/song/widget/songPage/recently_played_section.dart';
@@ -28,14 +28,12 @@ class SongsPage extends ConsumerWidget {
         children: [
           SongsHeader(userName: currentUser?.name),
           const SizedBox(height: 24),
-
           if (recentlyPlayed.isNotEmpty) ...[
             const SongsSectionTitle(title: 'Recently played'),
             const SizedBox(height: 12),
             RecentlyPlayedSection(songs: recentlyPlayed),
             const SizedBox(height: 24),
           ],
-
           const SongsSectionTitle(title: 'Latest today'),
           const SizedBox(height: 12),
           const LatestTodaySection(),

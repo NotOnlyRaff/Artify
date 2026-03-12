@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import UUID
 from sqlalchemy.orm import Session, joinedload
 
+from core.config import settings
 from database import get_db
 from middleware.auth_middleware import auth_middleware
 
@@ -18,7 +19,7 @@ from models.album import Album
 from models.songArtist import SongArtist, SongArtistRole
 from models.albumArtist import AlbumArtist
 
-from schemas.artist import ArtistCreate, ArtistUpdate, ArtistOut
+from schemas.artist_schema import ArtistCreate, ArtistUpdate, ArtistOut
 
 router = APIRouter(
     tags=["artists"],
@@ -26,10 +27,10 @@ router = APIRouter(
 
 # TODO: in produzione spostare queste in variabili d'ambiente
 cloudinary.config(
-    cloud_name="dgjqxcl8u",
-    api_key="152778217772653",
-    api_secret="BscHrsDSpoGrKfEJhn2_X1WIolc",  # NON committare in produzione
-    secure=True,
+    cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+    api_key=settings.CLOUDINARY_API_KEY,
+    api_secret=settings.CLOUDINARY_API_SECRET,
+    secure=True
 )
 
 # ---------- UTILITY ----------

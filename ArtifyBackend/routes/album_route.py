@@ -15,6 +15,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session, joinedload
 
+from core.config import settings
 from database import get_db
 from middleware.auth_middleware import auth_middleware
 
@@ -25,7 +26,7 @@ from models.albumArtist import AlbumArtist      # join album–artist
 from models.albumSong import AlbumSong          # join album–song
 
 from models.songArtist import SongArtist, SongArtistRole
-from schemas.album import (
+from schemas.album_schema import (
     AlbumCreate,
     AlbumUpdate,
     AlbumOut,
@@ -34,12 +35,11 @@ from schemas.album import (
 router = APIRouter(tags=["albums"])
 
 cloudinary.config(
-    cloud_name="dgjqxcl8u",
-    api_key="152778217772653",
-    api_secret="BscHrsDSpoGrKfEJhn2_X1WIolc",  # NON committare in produzione
-    secure=True,
+    cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+    api_key=settings.CLOUDINARY_API_KEY,
+    api_secret=settings.CLOUDINARY_API_SECRET,
+    secure=True
 )
-
 
 
 # ---------- UTILITY INTERNA ----------

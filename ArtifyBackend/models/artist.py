@@ -1,4 +1,4 @@
-from sqlalchemy import TEXT, Column, VARCHAR
+from sqlalchemy import TEXT, Column, VARCHAR, ForeignKey
 from sqlalchemy.orm import relationship
 from models.base import Base
 
@@ -9,7 +9,8 @@ class Artist(Base):
     id = Column(TEXT, primary_key=True)
     name = Column(VARCHAR(255), nullable=False)
     display_name = Column(VARCHAR(120), nullable=True)
-
+    user_id = Column(TEXT, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, unique=True)
+    
     slug = Column(
         VARCHAR(140),
         unique=True,
@@ -22,6 +23,9 @@ class Artist(Base):
     country = Column(VARCHAR(80), nullable=True)
 
     # --- Relazioni ---
+
+    # Relazione inversa verso l'utente
+    user = relationship("User", back_populates="artist_profile")
 
     song_artist_links = relationship(
         "SongArtist",

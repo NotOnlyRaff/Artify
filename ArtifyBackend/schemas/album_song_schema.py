@@ -2,10 +2,10 @@
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from schemas.album import SongRef   # id, song_name, thumbnail_url
-from schemas.song import AlbumRef   # id, title, cover_url
+from schemas.album_schema import SongRef   # id, song_name, thumbnail_url
+from schemas.song_schema import AlbumRef   # id, title, cover_url
 
 
 class AlbumSongBase(BaseModel):
@@ -42,5 +42,5 @@ class AlbumSongOut(BaseModel):
     album: AlbumRef
     song: SongRef
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+

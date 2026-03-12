@@ -100,7 +100,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
             ? Duration(seconds: song.durationSeconds!)
             : null,
       );
-    
+
       final audioSource = AudioSource.uri(
         Uri.parse(song.songUrl),
         tag: mediaItem,

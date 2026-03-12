@@ -1,5 +1,5 @@
 import 'package:client/core/failure/failure.dart';
-import 'package:client/core/providers/current_user_notifier.dart';
+import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:client/features/home/song/repositories/song_remote_repository.dart';
@@ -163,7 +163,7 @@ class SongViewModel extends _$SongViewModel {
         songId,
       }.toList();
 
-      userNotifier.addUser(
+      userNotifier.setUser(
         currentUser.copyWith(
           favorites: updatedFavs,
         ),
@@ -172,7 +172,7 @@ class SongViewModel extends _$SongViewModel {
       // rimuovo l'id
       final updatedFavs = currentFavs.where((id) => id != songId).toList();
 
-      userNotifier.addUser(
+      userNotifier.setUser(
         currentUser.copyWith(
           favorites: updatedFavs,
         ),

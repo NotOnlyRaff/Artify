@@ -1,93 +1,97 @@
-// lib/features/auth/models/user_model.dart (o percorso reale)
-
-// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
+enum UserRole {
+  admin,
+  artist,
+  user;
+
+  static UserRole fromString(String role) {
+    return UserRole.values.firstWhere(
+      (e) => e.name == role.toLowerCase(),
+      orElse: () => UserRole.user,
+    );
+  }
+}
+
 class UserModel {
+  final String id;
   final String name;
   final String email;
-  final String id;
   final String token;
-
-  /// lista di ID delle canzoni preferite (song.id)
+  final UserRole role;
+  final String? artistId;
   final List<String> favorites;
 
   UserModel({
+    required this.id,
     required this.name,
     required this.email,
-    required this.id,
     required this.token,
+    required this.role,
+    this.artistId,
     List<String>? favorites,
   }) : favorites = favorites ?? const [];
 
+  bool get isArtist => role == UserRole.artist;
+  bool get isAdmin => role == UserRole.admin;
+  bool get isUser => role == UserRole.user;
+  bool get hasArtistProfile => artistId?.isNotEmpty == true;
+
   UserModel copyWith({
+    String? id,
     String? name,
     String? email,
-    String? id,
     String? token,
+    UserRole? role,
+    String? artistId,
     List<String>? favorites,
   }) {
     return UserModel(
+      id: id ?? this.id,
       name: name ?? this.name,
       email: email ?? this.email,
-      id: id ?? this.id,
       token: token ?? this.token,
+      role: role ?? this.role,
+      artistId: artistId ?? this.artistId,
       favorites: favorites ?? this.favorites,
     );
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'id': id,
       'name': name,
       'email': email,
-      'id': id,
       'token': token,
-      // li rimandiamo come lista di id (se mai servirà)
+      'role': role.name,
+      'artist_id': artistId,
       'favorite_songs': favorites,
     };
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
-    // backend: favorite_songs: List[SongRef]
-    // SongRef: { id, song_name, thumbnail_url }
     final rawFavs = map['favorite_songs'];
-
     List<String> favoriteIds = [];
+
     if (rawFavs is List) {
       favoriteIds = rawFavs
           .map((item) {
-            if (item == null) return null;
-
-            if (item is String) {
-              // nel caso in futuro decidessi di mandare solo ID
-              return item;
-            }
-
-            if (item is Map<String, dynamic>) {
-              final id = item['id'] ?? item['song_id'];
-              if (id == null) return null;
-              return id.toString();
-            }
-
-            if (item is Map) {
-              final id = (item['id'] ?? item['song_id'])?.toString();
-              return id;
-            }
-
+            if (item is String) return item;
+            if (item is Map) return (item['id'] ?? item['song_id'])?.toString();
             return null;
           })
-          .whereType<String>() // filtra solo gli id non null
+          .whereType<String>()
           .toList();
     }
 
     return UserModel(
+      id: map['id']?.toString() ?? '',
       name: map['name']?.toString() ?? '',
       email: map['email']?.toString() ?? '',
-      id: map['id']?.toString() ?? '',
-      // signup e /auth/current non mandano token → lo metti dopo con copyWith
       token: map['token']?.toString() ?? '',
+      role: UserRole.fromString(map['role']?.toString() ?? 'user'),
+      artistId: map['artist_id']?.toString(),
       favorites: favoriteIds,
     );
   }
@@ -99,26 +103,32 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel(name: $name, email: $email, id: $id, token: $token, favorites: $favorites)';
+    return 'UserModel(id: $id, name: $name, email: $email, role: ${role.name}, artistId: $artistId)';
   }
 
   @override
   bool operator ==(covariant UserModel other) {
     if (identical(this, other)) return true;
 
-    return other.name == name &&
+    return other.id == id &&
+        other.name == name &&
         other.email == email &&
-        other.id == id &&
         other.token == token &&
+        other.role == role &&
+        other.artistId == artistId &&
         listEquals(other.favorites, favorites);
   }
 
   @override
   int get hashCode {
-    return name.hashCode ^
-        email.hashCode ^
-        id.hashCode ^
-        token.hashCode ^
-        favorites.hashCode;
+    return Object.hash(
+      id,
+      name,
+      email,
+      token,
+      role,
+      artistId,
+      Object.hashAll(favorites),
+    );
   }
 }

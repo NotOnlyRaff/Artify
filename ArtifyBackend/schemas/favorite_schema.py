@@ -2,9 +2,9 @@
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from schemas.album import SongRef  # id, song_name, thumbnail_url
+from schemas.album_schema import SongRef  # id, song_name, thumbnail_url
 
 
 class FavoriteBase(BaseModel):
@@ -34,5 +34,4 @@ class FavoriteOut(BaseModel):
     # opzionale: includi anche i dati della canzone agganciata
     song: Optional[SongRef] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

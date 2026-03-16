@@ -128,3 +128,14 @@ class SongService:
             joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
             joinedload(Song.albums)
         ).all()
+    
+    def get_song_by_id(db: Session, song_id: str):
+        song = db.query(Song).options(
+            joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
+            joinedload(Song.albums)
+        ).filter(Song.id == song_id).first()
+
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+
+        return song

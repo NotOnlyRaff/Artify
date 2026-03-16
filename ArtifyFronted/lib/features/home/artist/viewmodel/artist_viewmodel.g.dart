@@ -29,48 +29,16 @@ class _SystemHash {
   }
 }
 
-/// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-///
-/// Uso:
-///   ref.watch(getArtistsProvider(
-///     search: 'drake',
-///     songId: '...',
-///   ));
-///
-/// Copied from [getArtists].
+/// See also [getArtists].
 @ProviderFor(getArtists)
 const getArtistsProvider = GetArtistsFamily();
 
-/// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-///
-/// Uso:
-///   ref.watch(getArtistsProvider(
-///     search: 'drake',
-///     songId: '...',
-///   ));
-///
-/// Copied from [getArtists].
+/// See also [getArtists].
 class GetArtistsFamily extends Family<AsyncValue<List<ArtistModel>>> {
-  /// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getArtistsProvider(
-  ///     search: 'drake',
-  ///     songId: '...',
-  ///   ));
-  ///
-  /// Copied from [getArtists].
+  /// See also [getArtists].
   const GetArtistsFamily();
 
-  /// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getArtistsProvider(
-  ///     search: 'drake',
-  ///     songId: '...',
-  ///   ));
-  ///
-  /// Copied from [getArtists].
+  /// See also [getArtists].
   GetArtistsProvider call({
     String? search,
     String? songId,
@@ -109,25 +77,9 @@ class GetArtistsFamily extends Family<AsyncValue<List<ArtistModel>>> {
   String? get name => r'getArtistsProvider';
 }
 
-/// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-///
-/// Uso:
-///   ref.watch(getArtistsProvider(
-///     search: 'drake',
-///     songId: '...',
-///   ));
-///
-/// Copied from [getArtists].
+/// See also [getArtists].
 class GetArtistsProvider extends AutoDisposeFutureProvider<List<ArtistModel>> {
-  /// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getArtistsProvider(
-  ///     search: 'drake',
-  ///     songId: '...',
-  ///   ));
-  ///
-  /// Copied from [getArtists].
+  /// See also [getArtists].
   GetArtistsProvider({
     String? search,
     String? songId,
@@ -398,7 +350,7 @@ class _GetArtistProviderElement
   String get artistId => (origin as GetArtistProvider).artistId;
 }
 
-String _$artistViewModelHash() => r'b78ee909f456f3cbfd379e23c5aa1fb76998e145';
+String _$artistViewModelHash() => r'52e8513df5c3973d605f0330d71c056068f71339';
 
 /// ───────────────── VIEWMODEL: OPERAZIONI MUTABILI ───────────
 ///

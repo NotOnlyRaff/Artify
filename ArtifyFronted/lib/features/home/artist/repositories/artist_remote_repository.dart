@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
+import 'package:client/core/network/http_client_provider.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:flutter/foundation.dart';
@@ -12,31 +13,98 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'artist_remote_repository.g.dart';
 
 @riverpod
-ArtistRemoteRepository artistRemoteRepository(ArtistRemoteRepositoryRef ref) {
-  return ArtistRemoteRepository();
+ArtistRemoteRepository artistRemoteRepository(
+  ArtistRemoteRepositoryRef ref,
+) {
+  final client = ref.watch(httpClientProvider);
+  return ArtistRemoteRepository(client);
 }
 
 class ArtistRemoteRepository {
+  final http.Client client;
+
+  ArtistRemoteRepository(this.client);
+
   Uri _uri(String path) => Uri.parse('${ServerConstant.serverURL}$path');
 
   Map<String, String> _jsonHeaders(String token) => {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'x-auth-token': token,
       };
 
   Map<String, String> _authHeaders(String token) => {
+        'Accept': 'application/json',
         'x-auth-token': token,
       };
 
-  // ──────────────── UPLOAD ARTIST IMAGE ────────────────
+  Map<String, dynamic>? _tryParseObject(String body) {
+    if (body.trim().isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<dynamic>? _tryParseList(String body) {
+    if (body.trim().isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is List) return decoded;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _extractErrorMessageFromObject(
+    Map<String, dynamic>? body, {
+    String fallback = 'Server error',
+  }) {
+    if (body == null) return fallback;
+
+    final detail = body['detail'];
+
+    if (detail is String) return detail;
+
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] != null) {
+        return first['msg'].toString();
+      }
+      return detail.toString();
+    }
+
+    if (detail is Map && detail['msg'] != null) {
+      return detail['msg'].toString();
+    }
+
+    return fallback;
+  }
 
   Future<Either<AppFailure, String>> uploadArtistImage({
     required PickedMedia image,
     required String token,
   }) async {
     try {
-      final uri = _uri('/artist/upload-image');
-      final request = http.MultipartRequest('POST', uri);
+      if (token.trim().isEmpty) {
+        return Left(AppFailure('User not authenticated'));
+      }
+
+      final request = http.MultipartRequest(
+        'POST',
+        _uri('/artist/upload-image'),
+      );
 
       request.headers.addAll(_authHeaders(token));
 
@@ -44,6 +112,7 @@ class ArtistRemoteRepository {
         if (image.bytes == null) {
           return Left(AppFailure('Image bytes are null on Web'));
         }
+
         request.files.add(
           http.MultipartFile.fromBytes(
             'image',
@@ -52,13 +121,15 @@ class ArtistRemoteRepository {
           ),
         );
       } else {
-        if (image.filePath == null) {
+        if (image.filePath == null || image.filePath!.trim().isEmpty) {
           return Left(AppFailure('Image path is null on mobile'));
         }
+
         request.files.add(
           await http.MultipartFile.fromPath(
             'image',
             image.filePath!,
+            filename: image.name,
           ),
         );
       }
@@ -66,23 +137,20 @@ class ArtistRemoteRepository {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
+      final body = _tryParseObject(response.body);
+
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) {
-          return Left(
-            AppFailure(body['detail']?.toString() ?? 'Upload image failed'),
-          );
-        }
         return Left(
-          AppFailure('Upload image failed (${response.statusCode})'),
+          AppFailure(
+            _extractErrorMessageFromObject(
+              body,
+              fallback: 'Upload image failed (${response.statusCode})',
+            ),
+          ),
         );
       }
 
-      final payload = jsonDecode(response.body);
-      if (payload is! Map<String, dynamic>) {
-        return Left(AppFailure('Invalid response for image upload'));
-      }
-      final imageUrl = payload['image_url']?.toString();
+      final imageUrl = body?['image_url']?.toString();
       if (imageUrl == null || imageUrl.isEmpty) {
         return Left(AppFailure('Image URL missing in response'));
       }
@@ -105,10 +173,17 @@ class ArtistRemoteRepository {
     required String token,
   }) async {
     try {
-      final uri = _uri('/artist');
+      if (token.trim().isEmpty) {
+        return Left(AppFailure('User not authenticated'));
+      }
+
+      final trimmedName = name.trim();
+      if (trimmedName.isEmpty) {
+        return Left(AppFailure('Artist name is required'));
+      }
 
       final body = <String, dynamic>{
-        'name': name.trim(),
+        'name': trimmedName,
         'song_ids': songIds,
         'album_ids': albumIds,
       };
@@ -129,132 +204,134 @@ class ArtistRemoteRepository {
         body['country'] = country.trim();
       }
 
-      final res = await http.post(
-        uri,
+      final response = await client.post(
+        _uri('/artist'),
         headers: _jsonHeaders(token),
         body: jsonEncode(body),
       );
 
-      dynamic resBodyMap = jsonDecode(res.body);
+      final bodyMap = _tryParseObject(response.body);
 
-      if (res.statusCode != 201) {
-        if (resBodyMap is Map<String, dynamic> &&
-            resBodyMap['detail'] != null) {
-          return Left(AppFailure(_extractErrorMessage(resBodyMap['detail'])));
-        }
-        return Left(AppFailure('Create artist failed (${res.statusCode})'));
-      }
-      if (resBodyMap is! Map<String, dynamic>) {
-        return Left(AppFailure('Invalid response format for ArtistCreate'));
+      if (response.statusCode != 201) {
+        return Left(
+          AppFailure(
+            _extractErrorMessageFromObject(
+              bodyMap,
+              fallback: 'Create artist failed (${response.statusCode})',
+            ),
+          ),
+        );
       }
 
-      final artist = ArtistModel.fromMap(
-        Map<String, dynamic>.from(resBodyMap),
-      );
-      return Right(artist);
+      if (bodyMap == null) {
+        return Left(AppFailure('Invalid response format for artist creation'));
+      }
+
+      return Right(ArtistModel.fromMap(bodyMap));
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
   }
-
-  // ───────────────── GET SINGLE ARTIST ─────────────
-  //
-  // GET /artist/{artist_id}
-  // response_model = ArtistOut
 
   Future<Either<AppFailure, ArtistModel>> getArtist({
     required String artistId,
     required String token,
   }) async {
     try {
-      final uri = _uri('/artist/$artistId');
+      if (token.trim().isEmpty) {
+        return Left(AppFailure('User not authenticated'));
+      }
 
-      final res = await http.get(
-        uri,
-        headers: _jsonHeaders(token),
+      final response = await client.get(
+        _uri('/artist/$artistId'),
+        headers: _authHeaders(token),
       );
 
-      dynamic resBodyMap = jsonDecode(res.body);
+      final bodyMap = _tryParseObject(response.body);
 
-      if (res.statusCode != 200) {
-        if (resBodyMap is Map<String, dynamic>) {
-          return Left(
-            AppFailure(
-              resBodyMap['detail']?.toString() ?? 'Get artist failed',
+      if (response.statusCode != 200) {
+        return Left(
+          AppFailure(
+            _extractErrorMessageFromObject(
+              bodyMap,
+              fallback: 'Get artist failed (${response.statusCode})',
             ),
-          );
-        }
-        return Left(AppFailure('Get artist failed (${res.statusCode})'));
+          ),
+        );
       }
 
-      if (resBodyMap is! Map<String, dynamic>) {
-        return Left(AppFailure('Invalid response format for ArtistOut'));
+      if (bodyMap == null) {
+        return Left(AppFailure('Invalid response format for artist'));
       }
 
-      final artist = ArtistModel.fromJson(
-        Map<String, dynamic>.from(resBodyMap),
-      );
-      return Right(artist);
+      return Right(ArtistModel.fromMap(bodyMap));
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
   }
 
-  // ───────────────── LIST ARTISTS ──────────────────
-
   Future<Either<AppFailure, List<ArtistModel>>> listArtists({
-    required String token, // ignorati ora
+    required String token,
+    String? query,
     String? songId,
     String? albumId,
   }) async {
     try {
-      // Lista completa, nessun query param
-      final uri = _uri('/artist');
-
-      final res = await http.get(
-        uri,
-        headers: _jsonHeaders(token),
-      );
-
-      print(res.body);
-
-      dynamic resBodyMap = jsonDecode(res.body);
-
-      if (res.statusCode != 200) {
-        if (resBodyMap is Map<String, dynamic>) {
-          return Left(
-            AppFailure(
-              resBodyMap['detail']?.toString() ?? 'List artists failed',
-            ),
-          );
-        }
-        return Left(AppFailure('List artists failed (${res.statusCode})'));
+      if (token.trim().isEmpty) {
+        return Left(AppFailure('User not authenticated'));
       }
 
-      if (resBodyMap is! List) {
+      final hasFilters = (query != null && query.trim().isNotEmpty) ||
+          (songId != null && songId.trim().isNotEmpty) ||
+          (albumId != null && albumId.trim().isNotEmpty);
+
+      Uri uri = _uri(hasFilters ? '/artist/search' : '/artist');
+
+      if (hasFilters) {
+        final queryParams = <String, String>{
+          if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+          if (songId != null && songId.trim().isNotEmpty)
+            'song_id': songId.trim(),
+          if (albumId != null && albumId.trim().isNotEmpty)
+            'album_id': albumId.trim(),
+        };
+
+        uri = uri.replace(queryParameters: queryParams);
+      }
+
+      final response = await client.get(
+        uri,
+        headers: _authHeaders(token),
+      );
+
+      final bodyList = _tryParseList(response.body);
+      final bodyMap = _tryParseObject(response.body);
+
+      if (response.statusCode != 200) {
+        return Left(
+          AppFailure(
+            _extractErrorMessageFromObject(
+              bodyMap,
+              fallback: 'List artists failed (${response.statusCode})',
+            ),
+          ),
+        );
+      }
+
+      if (bodyList == null) {
         return Left(AppFailure('Invalid response format for artists list'));
       }
 
-      final artists = <ArtistModel>[];
-      for (final item in resBodyMap) {
-        if (item is Map<String, dynamic>) {
-          artists.add(ArtistModel.fromMap(item));
-        } else if (item is Map) {
-          artists.add(
-            ArtistModel.fromMap(Map<String, dynamic>.from(item)),
-          );
-        }
-      }
+      final artists = bodyList
+          .whereType<Map>()
+          .map((item) => ArtistModel.fromMap(Map<String, dynamic>.from(item)))
+          .toList(growable: false);
 
       return Right(artists);
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
   }
-
-  // ───────────────── SEARCH ARTISTS ──────────────────
-  //
-  // GET /artist/search?q=...&song_id=...&album_id=...
 
   Future<Either<AppFailure, List<ArtistModel>>> searchArtists({
     required String token,
@@ -262,105 +339,23 @@ class ArtistRemoteRepository {
     String? songId,
     String? albumId,
   }) async {
-    try {
-      Uri uri = _uri('/artist/search');
-
-      final queryParams = <String, String>{};
-      if (query != null && query.isNotEmpty) {
-        queryParams['q'] = query;
-      }
-      if (songId != null && songId.isNotEmpty) {
-        queryParams['song_id'] = songId;
-      }
-      if (albumId != null && albumId.isNotEmpty) {
-        queryParams['album_id'] = albumId;
-      }
-
-      if (queryParams.isNotEmpty) {
-        uri = uri.replace(queryParameters: queryParams);
-      }
-
-      final res = await http.get(
-        uri,
-        headers: _jsonHeaders(token),
-      );
-
-      dynamic resBodyMap = jsonDecode(res.body);
-
-      if (res.statusCode != 200) {
-        if (resBodyMap is Map<String, dynamic>) {
-          return Left(
-            AppFailure(
-              resBodyMap['detail']?.toString() ?? 'Search artists failed',
-            ),
-          );
-        }
-        return Left(AppFailure('Search artists failed (${res.statusCode})'));
-      }
-
-      if (resBodyMap is! List) {
-        return Left(AppFailure('Invalid response format for artists search'));
-      }
-
-      final artists = <ArtistModel>[];
-      for (final item in resBodyMap) {
-        if (item is Map<String, dynamic>) {
-          artists.add(ArtistModel.fromMap(item));
-        } else if (item is Map) {
-          artists.add(
-            ArtistModel.fromMap(Map<String, dynamic>.from(item)),
-          );
-        }
-      }
-
-      return Right(artists);
-    } catch (e) {
-      return Left(AppFailure(e.toString()));
-    }
+    return listArtists(
+      token: token,
+      query: query,
+      songId: songId,
+      albumId: albumId,
+    );
   }
 
   Future<Either<AppFailure, ArtistModel>> fetchArtistById({
     required String artistId,
     required String token,
-  }) async {
-    try {
-      final uri = _uri('/artist/$artistId');
-
-      final res = await http.get(
-        uri,
-        headers: _jsonHeaders(token),
-      );
-
-      print(res.body);
-
-      dynamic resBodyMap = jsonDecode(res.body);
-
-      if (res.statusCode != 200) {
-        if (resBodyMap is Map<String, dynamic>) {
-          throw Exception(
-            resBodyMap['detail']?.toString() ?? 'Get artist failed',
-          );
-        }
-        throw Exception('Get artist failed (${res.statusCode})');
-      }
-
-      if (resBodyMap is! Map<String, dynamic>) {
-        return Left(AppFailure('Invalid response format for ArtistOut'));
-      }
-
-      final artist = ArtistModel.fromMap(
-        Map<String, dynamic>.from(resBodyMap),
-      );
-
-      return Right(artist);
-    } catch (e) {
-      return Left(AppFailure(e.toString()));
-    }
+  }) {
+    return getArtist(
+      artistId: artistId,
+      token: token,
+    );
   }
-  // ───────────────── UPDATE ARTIST ─────────────────
-  //
-  // PATCH /artist/{artist_id}
-  // body = ArtistUpdate (tutti opzionali)
 
   Future<Either<AppFailure, ArtistModel>> updateArtist({
     required String artistId,
@@ -375,7 +370,9 @@ class ArtistRemoteRepository {
     required String token,
   }) async {
     try {
-      final uri = _uri('/artist/$artistId');
+      if (token.trim().isEmpty) {
+        return Left(AppFailure('User not authenticated'));
+      }
 
       final body = <String, dynamic>{};
 
@@ -385,86 +382,66 @@ class ArtistRemoteRepository {
       if (imageUrl != null) body['image_url'] = imageUrl.trim();
       if (bio != null) body['bio'] = bio.trim();
       if (country != null) body['country'] = country.trim();
-
-      if (songIds != null) {
-        body['song_ids'] = songIds;
-      }
-      if (albumIds != null) {
-        body['album_ids'] = albumIds;
-      }
+      if (songIds != null) body['song_ids'] = songIds;
+      if (albumIds != null) body['album_ids'] = albumIds;
 
       if (body.isEmpty) {
         return Left(AppFailure('No fields provided for artist update'));
       }
 
-      final res = await http.patch(
-        uri,
+      final response = await client.patch(
+        _uri('/artist/$artistId'),
         headers: _jsonHeaders(token),
         body: jsonEncode(body),
       );
 
-      dynamic resBodyMap = jsonDecode(res.body);
+      final bodyMap = _tryParseObject(response.body);
 
-      if (res.statusCode != 200) {
-        if (resBodyMap is Map<String, dynamic>) {
-          return Left(
-            AppFailure(
-              resBodyMap['detail']?.toString() ?? 'Update artist failed',
+      if (response.statusCode != 200) {
+        return Left(
+          AppFailure(
+            _extractErrorMessageFromObject(
+              bodyMap,
+              fallback: 'Update artist failed (${response.statusCode})',
             ),
-          );
-        }
-        return Left(AppFailure('Update artist failed (${res.statusCode})'));
+          ),
+        );
       }
 
-      if (resBodyMap is! Map<String, dynamic>) {
-        return Left(AppFailure('Invalid response format for ArtistUpdate'));
+      if (bodyMap == null) {
+        return Left(AppFailure('Invalid response format for artist update'));
       }
 
-      final artist = ArtistModel.fromMap(
-        Map<String, dynamic>.from(resBodyMap),
-      );
-      return Right(artist);
+      return Right(ArtistModel.fromMap(bodyMap));
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
   }
-
-  // ───────────────── DELETE ARTIST ─────────────────
-  //
-  // DELETE /artist/{artist_id}
 
   Future<Either<AppFailure, bool>> deleteArtist({
     required String artistId,
     required String token,
   }) async {
     try {
-      final uri = _uri('/artist/$artistId');
+      if (token.trim().isEmpty) {
+        return Left(AppFailure('User not authenticated'));
+      }
 
-      final res = await http.delete(
-        uri,
-        headers: _jsonHeaders(token),
+      final response = await client.delete(
+        _uri('/artist/$artistId'),
+        headers: _authHeaders(token),
       );
 
-      if (res.statusCode != 200 && res.statusCode != 204) {
-        dynamic resBodyMap;
-        try {
-          resBodyMap = jsonDecode(res.body);
-        } catch (_) {
-          return Left(
-            AppFailure('Delete artist failed (${res.statusCode})'),
-          );
-        }
-
-        if (resBodyMap is Map<String, dynamic>) {
-          return Left(
-            AppFailure(
-              resBodyMap['detail']?.toString() ?? 'Delete artist failed',
-            ),
-          );
-        }
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        final bodyMap = _tryParseObject(response.body);
 
         return Left(
-          AppFailure('Delete artist failed (${res.statusCode})'),
+          AppFailure(
+            _extractErrorMessageFromObject(
+              bodyMap,
+              fallback: 'Delete artist failed (${response.statusCode})',
+            ),
+          ),
         );
       }
 
@@ -472,20 +449,5 @@ class ArtistRemoteRepository {
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
-  }
-
-  String _extractErrorMessage(dynamic detail) {
-    if (detail is String) return detail;
-    if (detail is List && detail.isNotEmpty) {
-      final first = detail.first;
-      if (first is Map && first['msg'] is String) {
-        return first['msg'] as String;
-      }
-      return detail.toString();
-    }
-    if (detail is Map && detail['msg'] is String) {
-      return detail['msg'] as String;
-    }
-    return detail?.toString() ?? 'Unknown error';
   }
 }

@@ -1,5 +1,3 @@
-// lib/features/home/artist/model/artist_model.dart
-
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:flutter/foundation.dart';
@@ -12,8 +10,6 @@ class ArtistModel {
   final String? imageUrl;
   final String? bio;
   final String? country;
-
-  // 🔹 ora usiamo SongArtistModel, non più FavSongModel
   final List<SongModel> songs;
   final List<AlbumModel> albums;
 
@@ -57,49 +53,18 @@ class ArtistModel {
     return ArtistModel(
       id: map['id']?.toString() ?? '',
       name: map['name']?.toString() ?? '',
-      displayName:
-          map['display_name'] is String ? map['display_name'] as String : null,
-      slug: map['slug'] is String ? map['slug'] as String : null,
-      imageUrl: map['image_url'] == null ? null : map['image_url'].toString(),
-      bio: map['bio'] is String ? map['bio'] as String : null,
-      country: map['country'] is String ? map['country'] as String : null,
-      songs: (map['songs'] as List<dynamic>? ?? [])
-          .map(
-            (e) => SongModel.fromMap(
-              Map<String, dynamic>.from(e as Map),
-            ),
-          )
-          .toList(),
-      albums: (map['albums'] as List<dynamic>? ?? [])
-          .map(
-            (e) => AlbumModel.fromMap(e as Map<String, dynamic>),
-          )
-          .toList(),
+      displayName: map['display_name']?.toString(),
+      slug: map['slug']?.toString(),
+      imageUrl: map['image_url']?.toString(),
+      bio: map['bio']?.toString(),
+      country: map['country']?.toString(),
+      songs: _parseSongs(map['songs']),
+      albums: _parseAlbums(map['albums']),
     );
   }
 
   factory ArtistModel.fromJson(Map<String, dynamic> json) {
-    return ArtistModel(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      displayName: json['display_name'] as String?,
-      slug: json['slug'] as String?,
-      imageUrl: json['image_url'] == null
-          ? null
-          : json['image_url'].toString(), // 👈 idem qui
-      bio: json['bio'] as String?,
-      country: json['country'] as String?,
-      songs: (json['songs'] as List<dynamic>? ?? [])
-          .map(
-            (e) => SongModel.fromMap(e as Map<String, dynamic>),
-          )
-          .toList(),
-      albums: (json['albums'] as List<dynamic>? ?? [])
-          .map(
-            (e) => AlbumModel.fromMap(e as Map<String, dynamic>),
-          )
-          .toList(),
-    );
+    return ArtistModel.fromMap(json);
   }
 
   Map<String, dynamic> toJson() {
@@ -111,9 +76,27 @@ class ArtistModel {
       'image_url': imageUrl,
       'bio': bio,
       'country': country,
-      'songs': songs.map((s) => s.toJson()).toList(),
-      'albums': albums.map((a) => a.toJson()).toList(),
+      'songs': songs.map((song) => song.toJson()).toList(),
+      'albums': albums.map((album) => album.toJson()).toList(),
     };
+  }
+
+  static List<SongModel> _parseSongs(dynamic value) {
+    if (value is! List) return const [];
+
+    return value
+        .whereType<Map>()
+        .map((item) => SongModel.fromMap(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  static List<AlbumModel> _parseAlbums(dynamic value) {
+    if (value is! List) return const [];
+
+    return value
+        .whereType<Map>()
+        .map((item) => AlbumModel.fromMap(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
   }
 
   @override
@@ -149,14 +132,16 @@ class ArtistModel {
 
   @override
   int get hashCode {
-    return id.hashCode ^
-        name.hashCode ^
-        displayName.hashCode ^
-        slug.hashCode ^
-        imageUrl.hashCode ^
-        bio.hashCode ^
-        country.hashCode ^
-        songs.hashCode ^
-        albums.hashCode;
+    return Object.hash(
+      id,
+      name,
+      displayName,
+      slug,
+      imageUrl,
+      bio,
+      country,
+      Object.hashAll(songs),
+      Object.hashAll(albums),
+    );
   }
 }

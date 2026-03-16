@@ -1,6 +1,6 @@
 import 'package:client/core/failure/failure.dart';
-import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/core/utils.dart';
+import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/artist/repositories/artist_local_repository.dart';
 import 'package:client/features/home/artist/repositories/artist_remote_repository.dart';
@@ -9,13 +9,14 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'artist_viewmodel.g.dart';
 
-/// ───────────────── PROVIDER: LISTA ARTISTI ─────────────────
-///
-/// Uso:
-///   ref.watch(getArtistsProvider(
-///     search: 'drake',
-///     songId: '...',
-///   ));
+Future<String> _readStoredToken() async {
+  final token = await AuthLocalRepository().getToken();
+  if (token == null || token.isEmpty) {
+    throw Exception('User not authenticated');
+  }
+  return token;
+}
+
 @riverpod
 Future<List<ArtistModel>> getArtists(
   GetArtistsRef ref, {
@@ -23,13 +24,12 @@ Future<List<ArtistModel>> getArtists(
   String? songId,
   String? albumId,
 }) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
-
+  final token = await _readStoredToken();
   final repo = ref.watch(artistRemoteRepositoryProvider);
 
   final res = await repo.listArtists(
     token: token,
+    query: search,
     songId: songId,
     albumId: albumId,
   );
@@ -40,18 +40,12 @@ Future<List<ArtistModel>> getArtists(
   };
 }
 
-/// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-///
-/// Uso:
-///   ref.watch(getArtistProvider(artistId));
 @riverpod
 Future<ArtistModel> getArtist(
   GetArtistRef ref,
   String artistId,
 ) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
-
+  final token = await _readStoredToken();
   final repo = ref.watch(artistRemoteRepositoryProvider);
 
   final res = await repo.getArtist(
@@ -66,50 +60,73 @@ Future<ArtistModel> getArtist(
 }
 
 Future<ArtistModel> fetchArtistById(GetArtistRef ref, String artistId) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
-
+  final token = await _readStoredToken();
   final repo = ref.watch(artistRemoteRepositoryProvider);
-  final res = await repo.fetchArtistById(artistId: artistId, token: token);
+
+  final res = await repo.fetchArtistById(
+    artistId: artistId,
+    token: token,
+  );
+
   return switch (res) {
     Left(value: final l) => throw l.message,
     Right(value: final r) => r,
   };
 }
 
-/// ───────────────── VIEWMODEL: OPERAZIONI MUTABILI ───────────
-///
-/// Per create / update / delete + gestione "recent artists".
-///
-/// Uso:
-///   final vm = ref.read(artistViewModelProvider.notifier);
-///   vm.createArtist(...);
-///
-///   ref.listen(artistViewModelProvider, (prev, next) { ... });
 @riverpod
 class ArtistViewModel extends _$ArtistViewModel {
   ArtistRemoteRepository get _remoteRepo =>
       ref.read(artistRemoteRepositoryProvider);
+
   ArtistLocalRepository get _localRepo =>
       ref.read(artistLocalRepositoryProvider);
 
+  AuthLocalRepository get _authLocalRepository => AuthLocalRepository();
+
   @override
   AsyncValue? build() {
-    // stato iniziale: nessuna operazione in corso
     return null;
+  }
+
+  Future<String> _requireToken({String? overrideToken}) async {
+    if (overrideToken != null && overrideToken.trim().isNotEmpty) {
+      return overrideToken.trim();
+    }
+
+    final token = await _authLocalRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('User not authenticated');
+    }
+    return token;
   }
 
   Future<Either<AppFailure, String>> uploadArtistImage({
     required PickedMedia image,
+    String? token,
   }) async {
-    final token = ref.read(currentUserNotifierProvider)!.token;
-    return _remoteRepo.uploadArtistImage(
+    try {
+      final resolvedToken = await _requireToken(overrideToken: token);
+
+      return await _remoteRepo.uploadArtistImage(
+        image: image,
+        token: resolvedToken,
+      );
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
+  }
+
+  Future<Either<AppFailure, String>> uploadArtistImageWithToken({
+    required PickedMedia image,
+    required String token,
+  }) {
+    return uploadArtistImage(
       image: image,
       token: token,
     );
   }
 
-  // ───────────────── CREATE ARTIST ─────────────────
   Future<void> createArtist({
     required String name,
     String? displayName,
@@ -119,12 +136,9 @@ class ArtistViewModel extends _$ArtistViewModel {
     String? country,
     List<String> songIds = const [],
     List<String> albumIds = const [],
+    String? token,
   }) async {
-    state = const AsyncValue.loading();
-
-    final token = ref.read(currentUserNotifierProvider)!.token;
-
-    final res = await _remoteRepo.createArtist(
+    await createArtistResult(
       name: name,
       displayName: displayName,
       slug: slug,
@@ -135,25 +149,60 @@ class ArtistViewModel extends _$ArtistViewModel {
       albumIds: albumIds,
       token: token,
     );
+  }
 
-    switch (res) {
-      case Left(value: final failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
-      case Right(value: final artist):
-        // invalida liste ecc.
-        ref.invalidate(getArtistsProvider);
-        try {
-          await _localRepo.saveRecentlyOpened(artist);
-        } catch (e, st) {
-          state = AsyncValue.error('Error saving recent artist: $e', st);
-          // debugPrint('Error saving recent artist: $e');
-        }
+  Future<Either<AppFailure, ArtistModel>> createArtistResult({
+    required String name,
+    String? displayName,
+    String? slug,
+    String? imageUrl,
+    String? bio,
+    String? country,
+    List<String> songIds = const [],
+    List<String> albumIds = const [],
+    String? token,
+  }) async {
+    state = const AsyncValue.loading();
 
-        state = AsyncValue.data(artist);
+    try {
+      final resolvedToken = await _requireToken(overrideToken: token);
+
+      final res = await _remoteRepo.createArtist(
+        name: name,
+        displayName: displayName,
+        slug: slug,
+        imageUrl: imageUrl,
+        bio: bio,
+        country: country,
+        songIds: songIds,
+        albumIds: albumIds,
+        token: resolvedToken,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+          return Left(failure);
+
+        case Right(value: final artist):
+          ref.invalidate(getArtistsProvider);
+
+          try {
+            await _localRepo.saveRecentlyOpened(artist);
+          } catch (_) {
+            // non deve rompere il flow principale
+          }
+
+          state = AsyncValue.data(artist);
+          return Right(artist);
+      }
+    } catch (e) {
+      final failure = AppFailure(e.toString());
+      state = AsyncValue.error(failure.message, StackTrace.current);
+      return Left(failure);
     }
   }
 
-  // ───────────────── UPDATE ARTIST ─────────────────
   Future<void> updateArtist({
     required String artistId,
     String? name,
@@ -164,80 +213,84 @@ class ArtistViewModel extends _$ArtistViewModel {
     String? country,
     List<String>? songIds,
     List<String>? albumIds,
+    String? token,
   }) async {
     state = const AsyncValue.loading();
 
-    final token = ref.read(currentUserNotifierProvider)!.token;
+    try {
+      final resolvedToken = await _requireToken(overrideToken: token);
 
-    final res = await _remoteRepo.updateArtist(
-      artistId: artistId,
-      name: name,
-      displayName: displayName,
-      slug: slug,
-      imageUrl: imageUrl,
-      bio: bio,
-      country: country,
-      songIds: songIds,
-      albumIds: albumIds,
-      token: token,
-    );
+      final res = await _remoteRepo.updateArtist(
+        artistId: artistId,
+        name: name,
+        displayName: displayName,
+        slug: slug,
+        imageUrl: imageUrl,
+        bio: bio,
+        country: country,
+        songIds: songIds,
+        albumIds: albumIds,
+        token: resolvedToken,
+      );
 
-    switch (res) {
-      case Left(value: final failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
 
-      case Right(value: final artist):
-        // aggiorno anche in locale (se era tra i recenti)
-        await _localRepo.saveRecentlyOpened(artist);
-
-        // invalidiamo le liste dipendenti
-        ref.invalidate(getArtistsProvider);
-        ref.invalidate(getArtistProvider(artistId));
-
-        state = AsyncValue.data(artist);
-    }
-  }
-
-  // ───────────────── DELETE ARTIST ─────────────────
-  Future<void> deleteArtist({
-    required String artistId,
-  }) async {
-    state = const AsyncValue.loading();
-
-    final token = ref.read(currentUserNotifierProvider)!.token;
-
-    final res = await _remoteRepo.deleteArtist(
-      artistId: artistId,
-      token: token,
-    );
-
-    switch (res) {
-      case Left(value: final failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
-
-      case Right(value: final ok):
-        if (ok) {
+        case Right(value: final artist):
           try {
-            await _localRepo.removeFromRecentlyOpened(artistId);
-          } catch (_) {
-            // Se Hive non è inizializzato, non deve bloccare la delete lato UI.
-          }
+            await _localRepo.saveRecentlyOpened(artist);
+          } catch (_) {}
 
           ref.invalidate(getArtistsProvider);
           ref.invalidate(getArtistProvider(artistId));
-        }
-        state = AsyncValue.data(ok);
+
+          state = AsyncValue.data(artist);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }
 
-  // ───────────────── LOCAL HELPERS ─────────────────
+  Future<void> deleteArtist({
+    required String artistId,
+    String? token,
+  }) async {
+    state = const AsyncValue.loading();
 
-  /// Lista di artisti aperti di recente (Hive).
+    try {
+      final resolvedToken = await _requireToken(overrideToken: token);
+
+      final res = await _remoteRepo.deleteArtist(
+        artistId: artistId,
+        token: resolvedToken,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+
+        case Right(value: final ok):
+          if (ok) {
+            try {
+              await _localRepo.removeFromRecentlyOpened(artistId);
+            } catch (_) {}
+
+            ref.invalidate(getArtistsProvider);
+            ref.invalidate(getArtistProvider(artistId));
+          }
+
+          state = AsyncValue.data(ok);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
+    }
+  }
+
   List<ArtistModel> getRecentlyOpenedArtists() {
     return _localRepo.loadRecentlyOpened();
   }
 
-  /// Se in qualche schermata vuoi segnare manualmente che un artista è stato aperto.
   Future<void> markArtistOpened(ArtistModel artist) async {
     await _localRepo.saveRecentlyOpened(artist);
   }

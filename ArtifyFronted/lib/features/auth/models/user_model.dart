@@ -21,6 +21,7 @@ class UserModel {
   final String token;
   final UserRole role;
   final String? artistId;
+  final String? image_url; // 🆕 Nuovo campo
   final List<String> favorites;
 
   UserModel({
@@ -30,6 +31,7 @@ class UserModel {
     required this.token,
     required this.role,
     this.artistId,
+    this.image_url,
     List<String>? favorites,
   }) : favorites = favorites ?? const [];
 
@@ -45,6 +47,7 @@ class UserModel {
     String? token,
     UserRole? role,
     String? artistId,
+    String? profilePicUrl, // 🆕 Aggiornato
     List<String>? favorites,
   }) {
     return UserModel(
@@ -54,6 +57,7 @@ class UserModel {
       token: token ?? this.token,
       role: role ?? this.role,
       artistId: artistId ?? this.artistId,
+      image_url: image_url ?? this.image_url, // 🆕 Aggiornato
       favorites: favorites ?? this.favorites,
     );
   }
@@ -66,11 +70,13 @@ class UserModel {
       'token': token,
       'role': role.name,
       'artist_id': artistId,
+      'image_url': image_url, // 🆕 Snake_case per il backend
       'favorite_songs': favorites,
     };
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    // Gestione flessibile dei preferiti (oggetti completi o solo ID)
     final rawFavs = map['favorite_songs'];
     List<String> favoriteIds = [];
 
@@ -92,6 +98,7 @@ class UserModel {
       token: map['token']?.toString() ?? '',
       role: UserRole.fromString(map['role']?.toString() ?? 'user'),
       artistId: map['artist_id']?.toString(),
+      image_url: map['image_url']?.toString(), // 🆕 Mappatura corretta
       favorites: favoriteIds,
     );
   }
@@ -103,7 +110,7 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel(id: $id, name: $name, email: $email, role: ${role.name}, artistId: $artistId)';
+    return 'UserModel(id: $id, name: $name, email: $email, role: ${role.name}, artistId: $artistId, image_url: $image_url)';
   }
 
   @override
@@ -116,6 +123,7 @@ class UserModel {
         other.token == token &&
         other.role == role &&
         other.artistId == artistId &&
+        other.image_url == image_url && // 🆕 Aggiunto al confronto
         listEquals(other.favorites, favorites);
   }
 
@@ -128,6 +136,7 @@ class UserModel {
       token,
       role,
       artistId,
+      image_url, // 🆕 Aggiunto all'hash
       Object.hashAll(favorites),
     );
   }

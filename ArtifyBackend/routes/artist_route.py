@@ -1,68 +1,59 @@
-# routes/artist.py
-
-import mimetypes
-import uuid
+import cloudinary
 from typing import List, Optional
 
-import cloudinary
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import UUID
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, File, UploadFile, status
+from sqlalchemy.orm import Session
 
 from core.config import settings
 from database import get_db
-from middleware.auth_middleware import auth_middleware
-
-from models.artist import Artist
-from models.song import Song
-from models.album import Album
-from models.songArtist import SongArtist, SongArtistRole
-from models.albumArtist import AlbumArtist
-
+from middleware.auth_middleware import auth_middleware, require_role
+from models.user import User, UserRole
 from schemas.artist_schema import ArtistCreate, ArtistUpdate, ArtistOut
+from services.artist_service import ArtistService
 
-router = APIRouter(
-    tags=["artists"],
-)
+router = APIRouter(tags=["artists"])
 
-# TODO: in produzione spostare queste in variabili d'ambiente
 cloudinary.config(
     cloud_name=settings.CLOUDINARY_CLOUD_NAME,
     api_key=settings.CLOUDINARY_API_KEY,
     api_secret=settings.CLOUDINARY_API_SECRET,
-    secure=True
+    secure=True,
 )
 
-# ---------- UTILITY ----------
 
-def _get_artist_or_404(artist_id: uuid.UUID, db: Session) -> Artist:
-    artist_id = str(artist_id)
-    artist = (
-        db.query(Artist)
-        .options(
-            joinedload(Artist.songs),
-            joinedload(Artist.albums),
-        )
-        .filter(Artist.id == artist_id)
-        .first()
+# ---------- SEARCH / FILTER ARTISTI ----------
+
+@router.get(
+    "/search",
+    response_model=List[ArtistOut],
+)
+def search_artists(
+    db: Session = Depends(get_db),
+    _=Depends(auth_middleware),
+    q: Optional[str] = None,
+    song_id: Optional[str] = None,
+    album_id: Optional[str] = None,
+):
+    return ArtistService.search_artists(
+        db=db,
+        q=q,
+        song_id=song_id,
+        album_id=album_id,
     )
-    if not artist:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Artist not found",
-        )
-    return artist
 
-def _resolve_songs(db: Session, song_ids: List[str]) -> List[Song]:
-    if not song_ids:
-        return []
-    songs = db.query(Song).filter(Song.id.in_(song_ids)).all()
-    if len(songs) != len(set(song_ids)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Some song IDs do not exist",
-        )
-    return songs
+
+# ---------- LISTA ARTISTI ----------
+
+@router.get(
+    "",
+    response_model=List[ArtistOut],
+)
+def list_artists(
+    db: Session = Depends(get_db),
+    _=Depends(auth_middleware),
+):
+    return ArtistService.list_artists(db)
+
 
 # ---------- GET SINGOLO ARTISTA ----------
 
@@ -71,92 +62,12 @@ def _resolve_songs(db: Session, song_ids: List[str]) -> List[Song]:
     response_model=ArtistOut,
 )
 def get_artist(
-    artist_id: uuid.UUID,
+    artist_id: str,
     db: Session = Depends(get_db),
-    auth_details: dict = Depends(auth_middleware),
+    _=Depends(auth_middleware),
 ):
-    return _get_artist_or_404(artist_id, db)
+    return ArtistService.get_artist_or_404(artist_id, db)
 
-# ---------- LISTA ARTISTI ----------
-
-@router.get(
-    "",   # GET /artist/
-    response_model=List[ArtistOut],
-)
-def list_artists(
-    db: Session = Depends(get_db),
-    auth_details: dict = Depends(auth_middleware),
-):
-    """
-    Restituisce TUTTI gli artisti, senza filtri.
-    """
-    artists = (
-        db.query(Artist)
-        .options(
-            joinedload(Artist.songs),
-            joinedload(Artist.albums),
-        )
-        .order_by(Artist.name.asc())
-        .all()
-    )
-    return artists
-
-# ---------- SEARCH / FILTER ARTISTI ----------
-
-@router.get(
-    "/search",   # GET /artist/search
-    response_model=List[ArtistOut],
-)
-def search_artists(
-    db: Session = Depends(get_db),
-    auth_details: dict = Depends(auth_middleware),
-    q: Optional[str] = None,
-    song_id: Optional[str] = None,
-    album_id: Optional[str] = None,
-):
-    """
-    Ricerca / filtro artisti.
-
-    Filtri opzionali:
-    - `q`: match case-insensitive su name / display_name
-    - `song_id`: solo artisti collegati a quella song
-    - `album_id`: solo artisti collegati a quell'album
-    """
-    query = (
-        db.query(Artist)
-        .options(
-            joinedload(Artist.songs),
-            joinedload(Artist.albums),
-        )
-    )
-
-    if q:
-        pattern = f"%{q.lower()}%"
-        query = query.filter(
-            (Artist.name.ilike(pattern)) |
-            (Artist.display_name.ilike(pattern))
-        )
-
-    if song_id:
-        query = query.join(Artist.songs).filter(Song.id == song_id)
-
-    if album_id:
-        query = query.join(Artist.albums).filter(Album.id == album_id)
-
-    artists = query.all()
-    return artists
-
-
-def _resolve_albums(db: Session, album_ids: List[str]) -> List[Album]:
-    if not album_ids:
-        return []
-    albums = db.query(Album).filter(Album.id.in_(album_ids)).all()
-    if len(albums) != len(set(album_ids)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Some album IDs do not exist",
-        )
-    return albums
 
 # ---------- UPLOAD ARTIST IMAGE ----------
 
@@ -166,89 +77,30 @@ def _resolve_albums(db: Session, album_ids: List[str]) -> List[Album]:
 )
 async def upload_artist_image(
     image: UploadFile = File(...),
-    auth_details: dict = Depends(auth_middleware),
+    current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
-    content_type = image.content_type
-    guessed_type, _ = mimetypes.guess_type(image.filename or "")
-    is_image_type = (
-        (content_type and content_type.startswith("image/"))
-        or (guessed_type and guessed_type.startswith("image/"))
-        or content_type == "application/octet-stream"
-    )
-    if not is_image_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image file type",
-        )
-
-    image_id = str(uuid.uuid4())
-    try:
-        upload_res = cloudinary.uploader.upload(
-            image.file,
-            resource_type="image",
-            folder=f"artists/{image_id}",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error uploading artist image: {e}",
-        )
-
-    return {"image_url": upload_res["url"]}
+    image_url = ArtistService.upload_artist_image(image, current_user)
+    return {"image_url": image_url}
 
 
 # ---------- CREATE ARTIST ----------
 
 @router.post(
-    "",   # 👈 nota lo slash
+    "",
     status_code=status.HTTP_201_CREATED,
     response_model=ArtistOut,
 )
 def create_artist(
     payload: ArtistCreate,
     db: Session = Depends(get_db),
-    auth_details: dict = Depends(auth_middleware),
+    current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
-    artist_id = str(uuid.uuid4())
-
-    songs = _resolve_songs(db, payload.song_ids)
-    albums = _resolve_albums(db, payload.album_ids)
-
-    db_artist = Artist(
-        id=artist_id,
-        name=payload.name,
-        display_name=payload.display_name,
-        slug=payload.slug,
-        image_url=payload.image_url,
-        bio=payload.bio,
-        country=payload.country,
+    return ArtistService.create_artist(
+        payload=payload,
+        db=db,
+        current_user=current_user,
     )
 
-    db_artist.song_artist_links = [
-        SongArtist(
-            id=str(uuid.uuid4()),
-            song=song,
-            artist=db_artist,
-            role=SongArtistRole.PRIMARY,
-        )
-        for song in songs
-    ]
-
-    db_artist.album_artist_links = [
-        AlbumArtist(
-            id=str(uuid.uuid4()),
-            album=album,
-            artist=db_artist,
-            role=None,
-        )
-        for album in albums
-    ]
-
-    db.add(db_artist)
-    db.commit()
-
-    db_artist = _get_artist_or_404(artist_id, db)
-    return db_artist
 
 # ---------- UPDATE ARTIST ----------
 
@@ -260,52 +112,15 @@ def update_artist(
     artist_id: str,
     payload: ArtistUpdate,
     db: Session = Depends(get_db),
-    auth_details: dict = Depends(auth_middleware),
+    current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
-    artist = _get_artist_or_404(artist_id, db)
+    return ArtistService.update_artist(
+        artist_id=artist_id,
+        payload=payload,
+        db=db,
+        current_user=current_user,
+    )
 
-    if payload.name is not None:
-        artist.name = payload.name
-    if payload.display_name is not None:
-        artist.display_name = payload.display_name
-    if payload.slug is not None:
-        artist.slug = payload.slug
-    if payload.image_url is not None:
-        artist.image_url = payload.image_url
-    if payload.bio is not None:
-        artist.bio = payload.bio
-    if payload.country is not None:
-        artist.country = payload.country
-
-    if payload.song_ids is not None:
-        songs = _resolve_songs(db, payload.song_ids)
-        artist.song_artist_links.clear()
-        for song in songs:
-            artist.song_artist_links.append(
-                SongArtist(
-                    id=str(uuid.uuid4()),
-                    song=song,
-                    artist=artist,
-                    role=SongArtistRole.PRIMARY,
-                )
-            )
-
-    if payload.album_ids is not None:
-        albums = _resolve_albums(db, payload.album_ids)
-        artist.album_artist_links.clear()
-        for album in albums:
-            artist.album_artist_links.append(
-                AlbumArtist(
-                    id=str(uuid.uuid4()),
-                    album=album,
-                    artist=artist,
-                    role=None,
-                )
-            )
-
-    db.commit()
-    artist = _get_artist_or_404(artist_id, db)
-    return artist
 
 # ---------- DELETE ARTIST ----------
 
@@ -316,15 +131,7 @@ def update_artist(
 def delete_artist(
     artist_id: str,
     db: Session = Depends(get_db),
-    auth_details: dict = Depends(auth_middleware),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
 ):
-    artist = db.query(Artist).filter(Artist.id == artist_id).first()
-    if not artist:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Artist not found",
-        )
-
-    db.delete(artist)
-    db.commit()
+    ArtistService.delete_artist(artist_id, db)
     return {"message": "Artist deleted successfully"}

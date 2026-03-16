@@ -283,7 +283,7 @@ class SongRemoteRepository {
   }) async {
     try {
       final res = await http.get(
-        _uri('/song/list/favorites'),
+        _uri('/song/list'),
         headers: _jsonHeaders(token),
       );
 

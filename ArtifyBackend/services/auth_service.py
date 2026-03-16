@@ -1,14 +1,36 @@
+from sqlite3 import IntegrityError
 import uuid
 import bcrypt
 import jwt
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
+from models import user
 from models.user import User, UserRole
 from models.artist import Artist
-from schemas.user_schema import UserCreate, UserLogin
+from schemas.user_schema import UserCreate, UserLogin, UserPasswordChange, UserUpdate
 from core.config import settings
 
 class Auth:
+
+
+    @staticmethod
+    def _get_user_or_404(db: Session, user_id: str) -> User:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
+    @staticmethod
+    def _assert_self_or_admin(requester: User, target_user_id: str) -> None:
+        is_admin = requester.role == UserRole.ADMIN
+        is_self = requester.id == target_user_id
+
+        if not (is_admin or is_self):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to perform this action",
+            )
+
 
     @staticmethod
     def signup(db: Session, user_data: UserCreate):
@@ -30,13 +52,22 @@ class Auth:
                 email=user_data.email,
                 password=hashed_pw,
                 name=user_data.name,
-                role=role
+                role=role,
+                image_url=user_data.image_url
             )
             db.add(new_user)
 
             db.commit()
             db.refresh(new_user)
             return new_user
+        
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail="User with the same email already exists!",
+            )
+        
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -61,3 +92,88 @@ class Auth:
         if not user:
             raise HTTPException(status_code=404, detail="User not found!")
         return user
+    
+    @staticmethod
+    def update_user_profile(db: Session, user_id: str, update_data: UserUpdate):
+
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        update_dict = update_data.model_dump(exclude_unset=True)
+
+        for field, value in update_dict.items():
+            setattr(user, field, value)
+
+        db.commit()
+        db.refresh(user)
+
+        return user    
+
+    @staticmethod
+    def delete_user(db: Session, requester_id: str, target_user_id: str) -> None:
+        requester = Auth._get_user_or_404(db, requester_id)
+        target_user = Auth._get_user_or_404(db, target_user_id)
+
+        Auth._assert_self_or_admin(requester, target_user_id)
+
+        try:
+            db.delete(target_user)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
+
+    @staticmethod
+    def change_user_password(
+        db: Session,
+        requester_id: str,
+        target_user_id: str,
+        payload: UserPasswordChange,
+    ) -> None:
+        requester = Auth._get_user_or_404(db, requester_id)
+        target_user = Auth._get_user_or_404(db, target_user_id)
+
+        Auth._assert_self_or_admin(requester, target_user_id)
+
+        is_admin = requester.role == UserRole.ADMIN
+        is_self = requester.id == target_user_id
+
+        # Se l'utente cambia la propria password e NON è admin,
+        # deve fornire la password attuale.
+        if is_self and not is_admin:
+            if not payload.current_password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is required",
+                )
+
+            if not bcrypt.checkpw(
+                payload.current_password.encode(),
+                target_user.password,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect",
+                )
+
+        # Evita password identica a quella attuale
+        if bcrypt.checkpw(payload.new_password.encode(), target_user.password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be different from the current password",
+            )
+
+        try:
+            target_user.password = bcrypt.hashpw(
+                payload.new_password.encode(),
+                bcrypt.gensalt(),
+            )
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Password change failed: {str(e)}",
+            )

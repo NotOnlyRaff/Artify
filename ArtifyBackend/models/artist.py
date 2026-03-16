@@ -9,7 +9,6 @@ class Artist(Base):
     id = Column(TEXT, primary_key=True)
     name = Column(VARCHAR(255), nullable=False)
     display_name = Column(VARCHAR(120), nullable=True)
-    user_id = Column(TEXT, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, unique=True)
     
     slug = Column(
         VARCHAR(140),
@@ -25,7 +24,7 @@ class Artist(Base):
     # --- Relazioni ---
 
     # Relazione inversa verso l'utente
-    user = relationship("User", back_populates="artist_profile")
+    user = relationship("User", back_populates="artist_profile", uselist=False, foreign_keys="User.artist_id", passive_deletes=True)
 
     song_artist_links = relationship(
         "SongArtist",

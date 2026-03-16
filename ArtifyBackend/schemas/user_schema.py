@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     """
     name: str
     email: EmailStr
+    image_url: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -44,8 +45,20 @@ class UserOut(UserBase):
     role: UserRole
 
     artist_id: Optional[str] = None
-
+    
     # lista delle canzoni preferite (via relazione User.favorite_songs)
     favorite_songs: List[SongRef] = Field(default_factory=list)
 
+
     model_config = ConfigDict(from_attributes=True)
+
+class UserUpdate(BaseModel):
+    """
+    Schema per aggiornare il profilo (es. cambiare nome o foto)
+    """
+    name: Optional[str] = None
+    image_url: Optional[str] = None
+
+class UserPasswordChange(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str = Field(min_length=8, max_length=128)

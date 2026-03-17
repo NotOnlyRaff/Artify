@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:986221030344:android:557ad00a584bca2122eefd",
+        "mobilesdk_app_id": "1:986221030344:android:a8397caf00be00fb22eefd",
         "android_client_info": {
-          "package_name": "com.example.client"
+          "package_name": "com.artify.app"
         }
       },
       "oauth_client": [],

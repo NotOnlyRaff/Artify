@@ -26,4 +26,7 @@ app.include_router(song_route.router, prefix="/song")
 app.include_router(album_route.router, prefix="/album")
 app.include_router(artist_route.router, prefix="/artist")
 app.include_router(songArtist_route.router, prefix="/song-artist")
-Base.metadata.create_all(engine)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

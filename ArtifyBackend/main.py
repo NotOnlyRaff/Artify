@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from models.base import Base
@@ -6,12 +8,9 @@ from database import engine
 
 app = FastAPI()
 
-# ⬇⬇ CORS (sviluppo: puoi anche usare "*" se vuoi semplificare)
-origins = [
-    "http://localhost:57605",  # porta di Flutter Web (controlla quella reale)
-    "http://127.0.0.1:57605",
-    "http://localhost:8000",   # opzionale, ma non fa male
-]
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+origins = [origin.strip() for origin in allowed_origins.split(",") if origin.strip()]
+
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,5 +4,5 @@
 //}
 
 class ServerConstant {
-  static String serverURL = 'http://192.168.64.1:8000';
+  static String serverURL = 'https://artify-production-1354.up.railway.app';
 }

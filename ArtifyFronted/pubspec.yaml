@@ -47,7 +47,6 @@ dependencies:
   just_audio: ^0.10.5
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  isar_flutter_libs: ^3.1.0+1
   path_provider: ^2.1.0
   just_audio_background: ^0.0.1-beta.12
   mime: ^2.0.0
@@ -56,6 +55,7 @@ dependencies:
   particles_flutter: ^2.0.2
   flutter_animate: ^4.2.0
   particle_effect: ^1.0.5
+  firebase_core: ^4.5.0
 
 dev_dependencies:
   flutter_test:

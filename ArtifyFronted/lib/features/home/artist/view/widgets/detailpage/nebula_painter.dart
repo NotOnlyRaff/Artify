@@ -3,19 +3,20 @@ import 'package:flutter/material.dart';
 class NebulaPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width * 0.2, size.height * 0.1);
-    final paint = Paint()
+    final paint1 = Paint()
       ..shader = const RadialGradient(
         colors: [
           Color(0xFF8B5CF6),
           Colors.transparent,
         ],
         stops: [0.0, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: 140));
+      ).createShader(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.18, size.height * 0.16),
+          radius: size.width * 0.42,
+        ),
+      );
 
-    canvas.drawCircle(center, 140, paint);
-
-    final center2 = Offset(size.width * 0.8, size.height * 0.8);
     final paint2 = Paint()
       ..shader = const RadialGradient(
         colors: [
@@ -23,8 +24,47 @@ class NebulaPainter extends CustomPainter {
           Colors.transparent,
         ],
         stops: [0.0, 1.0],
-      ).createShader(Rect.fromCircle(center: center2, radius: 160));
-    canvas.drawCircle(center2, 160, paint2);
+      ).createShader(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.86, size.height * 0.78),
+          radius: size.width * 0.46,
+        ),
+      );
+
+    final paint3 = Paint()
+      ..shader = const RadialGradient(
+        colors: [
+          Color(0xFFF97316),
+          Colors.transparent,
+        ],
+        stops: [0.0, 1.0],
+      ).createShader(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.62, size.height * 0.24),
+          radius: size.width * 0.24,
+        ),
+      );
+
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFF09090F),
+    );
+
+    canvas.drawCircle(
+      Offset(size.width * 0.18, size.height * 0.16),
+      size.width * 0.42,
+      paint1,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.86, size.height * 0.78),
+      size.width * 0.46,
+      paint2,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.62, size.height * 0.24),
+      size.width * 0.24,
+      paint3,
+    );
   }
 
   @override

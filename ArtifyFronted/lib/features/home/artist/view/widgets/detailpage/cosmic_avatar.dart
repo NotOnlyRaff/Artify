@@ -4,14 +4,24 @@ import 'package:google_fonts/google_fonts.dart';
 class CosmicAvatar extends StatelessWidget {
   final String displayName;
   final String? imageUrl;
+  final double size;
 
-  const CosmicAvatar({required this.displayName, this.imageUrl});
+  const CosmicAvatar({
+    super.key,
+    required this.displayName,
+    this.imageUrl,
+    this.size = 86,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final initial = displayName.trim().isNotEmpty
+        ? displayName.trim()[0].toUpperCase()
+        : '?';
 
     return Container(
+      width: size,
+      height: size,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -23,14 +33,22 @@ class CosmicAvatar extends StatelessWidget {
             Color(0xFF60A5FA),
           ],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF8B5CF6).withOpacity(0.28),
+            blurRadius: 26,
+            spreadRadius: 2,
+          ),
+        ],
       ),
       child: ClipOval(
         child: imageUrl != null && imageUrl!.isNotEmpty
             ? Image.network(
                 imageUrl!,
-                width: 86,
-                height: 86,
+                width: size,
+                height: size,
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallback(initial),
               )
             : _fallback(initial),
       ),
@@ -39,8 +57,8 @@ class CosmicAvatar extends StatelessWidget {
 
   Widget _fallback(String initial) {
     return Container(
-      width: 86,
-      height: 86,
+      width: size,
+      height: size,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
@@ -48,6 +66,8 @@ class CosmicAvatar extends StatelessWidget {
             Color(0xFF4B39EF),
             Color(0xFF18181B),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       alignment: Alignment.center,
@@ -55,7 +75,7 @@ class CosmicAvatar extends StatelessWidget {
         initial,
         style: GoogleFonts.plusJakartaSans(
           color: Colors.white,
-          fontSize: 32,
+          fontSize: size * 0.34,
           fontWeight: FontWeight.w800,
         ),
       ),

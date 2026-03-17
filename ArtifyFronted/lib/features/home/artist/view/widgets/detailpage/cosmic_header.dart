@@ -1,7 +1,7 @@
 import 'dart:ui';
 
-import 'package:client/features/home/artist/view/widgets/cosmic_avatar.dart';
-import 'package:client/features/home/artist/view/widgets/nebula_painter.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/cosmic_avatar.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/nebula_painter.dart';
 import 'package:flutter/material.dart';
 
 class CosmicHeader extends StatelessWidget {

@@ -1,4 +1,4 @@
-import 'package:client/features/home/artist/view/widgets/artist_detail_body.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/artist_detail_body.dart';
 import 'package:client/features/home/view/widgets/music_slab.dart';
 import 'package:client/features/home/view/widgets/space_background.dart';
 import 'package:flutter/material.dart';

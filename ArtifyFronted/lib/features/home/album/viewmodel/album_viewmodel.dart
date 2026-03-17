@@ -1,27 +1,30 @@
 import 'package:client/core/failure/failure.dart';
-import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/core/utils.dart';
+import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/album/repositories/album_local_repository.dart';
 import 'package:client/features/home/album/repositories/album_remote_repository.dart';
 import 'package:client/features/home/song/model/song_model.dart';
-import 'package:fpdart/fpdart.dart'; // Either, Left, Right
+import 'package:fpdart/fpdart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'album_viewmodel.g.dart';
 
+Future<String> _readStoredAlbumToken() async {
+  final token = await AuthLocalRepository().getToken();
+  if (token == null || token.isEmpty) {
+    throw Exception('User not authenticated');
+  }
+  return token;
+}
+
 /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
-///
-/// Uso:
-///   ref.watch(getAllAlbumsProvider());
-///   ref.watch(getAllAlbumsProvider(artistId: '...'));
 @riverpod
 Future<List<AlbumModel>> getAllAlbums(
   GetAllAlbumsRef ref, {
   String? artistId,
 }) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
+  final token = await _readStoredAlbumToken();
   final repo = ref.watch(albumRemoteRepositoryProvider);
 
   final res = await repo.listAlbums(
@@ -36,16 +39,12 @@ Future<List<AlbumModel>> getAllAlbums(
 }
 
 /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
-///
-/// Uso:
-///   ref.watch(getAlbumProvider(albumId));
 @riverpod
 Future<AlbumModel> getAlbum(
   GetAlbumRef ref,
   String albumId,
 ) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
+  final token = await _readStoredAlbumToken();
   final repo = ref.watch(albumRemoteRepositoryProvider);
 
   final res = await repo.getAlbum(
@@ -63,23 +62,37 @@ Future<AlbumModel> getAlbum(
 @riverpod
 class AlbumViewModel extends _$AlbumViewModel {
   AlbumRemoteRepository get _remote => ref.read(albumRemoteRepositoryProvider);
+
   AlbumLocalRepository get _local => ref.read(albumLocalRepositoryProvider);
 
-  String get _token => ref.read(currentUserNotifierProvider)!.token;
+  AuthLocalRepository get _authLocalRepository => AuthLocalRepository();
 
   @override
   AsyncValue? build() {
-    // stato iniziale: nessuna operazione in corso
     return null;
+  }
+
+  Future<String> _requireToken() async {
+    final token = await _authLocalRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('User not authenticated');
+    }
+    return token;
   }
 
   Future<Either<AppFailure, String>> uploadAlbumCover({
     required PickedMedia cover,
   }) async {
-    return _remote.uploadAlbumCover(
-      cover: cover,
-      token: _token,
-    );
+    try {
+      final token = await _requireToken();
+
+      return await _remote.uploadAlbumCover(
+        cover: cover,
+        token: token,
+      );
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
   }
 
   Future<void> createAlbum({
@@ -95,30 +108,36 @@ class AlbumViewModel extends _$AlbumViewModel {
   }) async {
     state = const AsyncValue.loading();
 
-    final res = await _remote.createAlbum(
-      title: title,
-      releaseDate: releaseDate,
-      label: label,
-      albumType: albumType,
-      genre: genre,
-      coverUrl: coverUrl,
-      artistIds: artistIds,
-      songIds: songIds,
-      newSongs: newSongs,
-      token: _token,
-    );
+    try {
+      final token = await _requireToken();
 
-    switch (res) {
-      case Left(value: final failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
-      case Right(value: final album):
-        // invalida le liste album
-        ref.invalidate(getAllAlbumsProvider);
-        state = AsyncValue.data(album);
+      final res = await _remote.createAlbum(
+        title: title,
+        releaseDate: releaseDate,
+        label: label,
+        albumType: albumType,
+        genre: genre,
+        coverUrl: coverUrl,
+        artistIds: artistIds,
+        songIds: songIds,
+        newSongs: newSongs,
+        token: token,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+
+        case Right(value: final album):
+          ref.invalidate(getAllAlbumsProvider);
+          ref.invalidate(getAlbumProvider(album.id));
+          state = AsyncValue.data(album);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }
 
-  /// UPDATE ALBUM (PATCH)
   Future<void> updateAlbum({
     required String albumId,
     String? title,
@@ -132,63 +151,73 @@ class AlbumViewModel extends _$AlbumViewModel {
   }) async {
     state = const AsyncValue.loading();
 
-    final res = await _remote.updateAlbum(
-      albumId: albumId,
-      title: title,
-      releaseDate: releaseDate,
-      label: label,
-      albumType: albumType,
-      genre: genre,
-      coverUrl: coverUrl,
-      artistIds: artistIds,
-      songIds: songIds,
-      token: _token,
-    );
+    try {
+      final token = await _requireToken();
 
-    switch (res) {
-      case Left(value: final failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
-      case Right(value: final album):
-        // refresh lista + dettaglio
-        ref.invalidate(getAllAlbumsProvider);
-        ref.invalidate(getAlbumProvider(albumId));
-        state = AsyncValue.data(album);
+      final res = await _remote.updateAlbum(
+        albumId: albumId,
+        title: title,
+        releaseDate: releaseDate,
+        label: label,
+        albumType: albumType,
+        genre: genre,
+        coverUrl: coverUrl,
+        artistIds: artistIds,
+        songIds: songIds,
+        token: token,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+
+        case Right(value: final album):
+          ref.invalidate(getAllAlbumsProvider);
+          ref.invalidate(getAlbumProvider(albumId));
+          state = AsyncValue.data(album);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }
 
-  /// DELETE ALBUM
   Future<void> deleteAlbum(String albumId) async {
     state = const AsyncValue.loading();
 
-    final res = await _remote.deleteAlbum(
-      albumId: albumId,
-      token: _token,
-    );
+    try {
+      final token = await _requireToken();
 
-    switch (res) {
-      case Left(value: final failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
-      case Right(value: final success):
-        if (success) {
-          ref.invalidate(getAllAlbumsProvider);
-        }
-        state = AsyncValue.data(success);
+      final res = await _remote.deleteAlbum(
+        albumId: albumId,
+        token: token,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+
+        case Right(value: final success):
+          if (success) {
+            ref.invalidate(getAllAlbumsProvider);
+            ref.invalidate(getAlbumProvider(albumId));
+          }
+          state = AsyncValue.data(success);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }
 
   /// ────────────── CACHE LOCALE (Hive) ──────────────
 
-  /// Album aperti di recente
   List<AlbumModel> getRecentlyOpenedAlbums() {
     return _local.loadRecentlyOpened();
   }
 
-  /// Marca un album come "aperto di recente"
   Future<void> markAlbumOpened(AlbumModel album) async {
     await _local.saveRecentlyOpened(album);
   }
 
-  /// Svuota la lista "recently opened"
   Future<void> clearRecentlyOpenedAlbums() async {
     await _local.clearAll();
   }

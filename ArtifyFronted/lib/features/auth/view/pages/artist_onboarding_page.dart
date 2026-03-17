@@ -130,7 +130,7 @@ class _ArtistOnboardingPageState extends ConsumerState<ArtistOnboardingPage> {
     });
 
     try {
-      final signupRes = await authVm.signUpUserResult(
+      final signupRes = await authVm.signUpUser(
         name: widget.accountName,
         email: widget.email,
         password: widget.password,
@@ -200,8 +200,6 @@ class _ArtistOnboardingPageState extends ConsumerState<ArtistOnboardingPage> {
         case Right():
           break;
       }
-
-      await authVm.logout();
 
       if (!mounted) return;
 

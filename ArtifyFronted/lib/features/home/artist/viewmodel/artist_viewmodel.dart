@@ -98,6 +98,7 @@ class ArtistViewModel extends _$ArtistViewModel {
     if (token == null || token.isEmpty) {
       throw Exception('User not authenticated');
     }
+
     return token;
   }
 
@@ -186,12 +187,11 @@ class ArtistViewModel extends _$ArtistViewModel {
 
         case Right(value: final artist):
           ref.invalidate(getArtistsProvider);
+          ref.invalidate(getArtistProvider(artist.id));
 
           try {
             await _localRepo.saveRecentlyOpened(artist);
-          } catch (_) {
-            // non deve rompere il flow principale
-          }
+          } catch (_) {}
 
           state = AsyncValue.data(artist);
           return Right(artist);

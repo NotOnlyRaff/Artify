@@ -17,7 +17,7 @@ import 'package:client/features/home/song/model/song_model.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fpdart/fpdart.dart' hide State;
+import 'package:fpdart/fpdart.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class UploadAlbumPage extends ConsumerStatefulWidget {

@@ -1,12 +1,12 @@
-import 'package:client/features/home/artist/view/widgets/section_card.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/section_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:client/features/home/artist/view/widgets/cosmic_header.dart';
-import 'package:client/features/home/artist/view/widgets/artist_actions_row.dart';
-import 'package:client/features/home/artist/view/widgets/cosmic_stats_row.dart';
-import 'package:client/features/home/artist/view/widgets/song_row.dart';
-import 'package:client/features/home/artist/view/widgets/album_card.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/cosmic_header.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/artist_actions_row.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/cosmic_stats_row.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/song_row.dart';
+import 'package:client/features/home/artist/view/widgets/detailpage/album_card.dart';
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
 
 class ArtistDetailBody extends ConsumerWidget {

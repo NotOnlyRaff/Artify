@@ -5,7 +5,7 @@ import 'package:client/features/home/admin/view/widgets/uploadArtist/artist_uplo
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fpdart/fpdart.dart' hide State;
+import 'package:fpdart/fpdart.dart';
 
 class UploadArtistPage extends ConsumerStatefulWidget {
   const UploadArtistPage({super.key});

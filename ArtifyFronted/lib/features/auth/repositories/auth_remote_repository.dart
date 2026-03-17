@@ -105,6 +105,7 @@ class AuthRemoteRepository {
     try {
       final response = await client.get(
         Uri.parse('${ServerConstant.serverURL}/auth/'),
+        headers: _authHeaders(token),
       );
 
       final result = _handleUserResponse(response);
@@ -191,6 +192,12 @@ class AuthRemoteRepository {
     String? profilePicUrl,
   }) async {
     try {
+      final token = await _localRepository.getToken();
+
+      if (token == null || token.isEmpty) {
+        return Left(AppFailure('User not authenticated'));
+      }
+
       final response = await client.patch(
         Uri.parse('${ServerConstant.serverURL}/auth/update-profile'),
         headers: await _jsonHeaders(authenticated: true),
@@ -200,7 +207,8 @@ class AuthRemoteRepository {
         }),
       );
 
-      return _handleUserResponse(response);
+      final result = _handleUserResponse(response);
+      return result.map((user) => user.copyWith(token: token));
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
@@ -310,4 +318,9 @@ class AuthRemoteRepository {
 
     return 'Errore del server';
   }
+
+  Map<String, String> _authHeaders(String token) => {
+        'Accept': 'application/json',
+        'x-auth-token': token,
+      };
 }

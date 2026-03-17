@@ -6,7 +6,7 @@ part of 'artist_viewmodel.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$getArtistsHash() => r'ad4d1e398aab1a11cbdb793bb377cf33646c0cbc';
+String _$getArtistsHash() => r'8a830f2b47ca65c51a8bae9666c2fadb1de0f546';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -165,8 +165,6 @@ class GetArtistsProvider extends AutoDisposeFutureProvider<List<ArtistModel>> {
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin GetArtistsRef on AutoDisposeFutureProviderRef<List<ArtistModel>> {
   /// The parameter `search` of this provider.
   String? get search;
@@ -191,38 +189,18 @@ class _GetArtistsProviderElement
   String? get albumId => (origin as GetArtistsProvider).albumId;
 }
 
-String _$getArtistHash() => r'6cf6128c61d23f7116a989f83e8643517557bfef';
+String _$getArtistHash() => r'335f1e7cb86f383395edddaa90f089812e0cfba6';
 
-/// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-///
-/// Uso:
-///   ref.watch(getArtistProvider(artistId));
-///
-/// Copied from [getArtist].
+/// See also [getArtist].
 @ProviderFor(getArtist)
 const getArtistProvider = GetArtistFamily();
 
-/// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-///
-/// Uso:
-///   ref.watch(getArtistProvider(artistId));
-///
-/// Copied from [getArtist].
+/// See also [getArtist].
 class GetArtistFamily extends Family<AsyncValue<ArtistModel>> {
-  /// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getArtistProvider(artistId));
-  ///
-  /// Copied from [getArtist].
+  /// See also [getArtist].
   const GetArtistFamily();
 
-  /// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getArtistProvider(artistId));
-  ///
-  /// Copied from [getArtist].
+  /// See also [getArtist].
   GetArtistProvider call(
     String artistId,
   ) {
@@ -255,19 +233,9 @@ class GetArtistFamily extends Family<AsyncValue<ArtistModel>> {
   String? get name => r'getArtistProvider';
 }
 
-/// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-///
-/// Uso:
-///   ref.watch(getArtistProvider(artistId));
-///
-/// Copied from [getArtist].
+/// See also [getArtist].
 class GetArtistProvider extends AutoDisposeFutureProvider<ArtistModel> {
-  /// ───────────────── PROVIDER: SINGOLO ARTISTA ────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getArtistProvider(artistId));
-  ///
-  /// Copied from [getArtist].
+  /// See also [getArtist].
   GetArtistProvider(
     String artistId,
   ) : this._internal(
@@ -335,8 +303,6 @@ class GetArtistProvider extends AutoDisposeFutureProvider<ArtistModel> {
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin GetArtistRef on AutoDisposeFutureProviderRef<ArtistModel> {
   /// The parameter `artistId` of this provider.
   String get artistId;
@@ -350,19 +316,9 @@ class _GetArtistProviderElement
   String get artistId => (origin as GetArtistProvider).artistId;
 }
 
-String _$artistViewModelHash() => r'52e8513df5c3973d605f0330d71c056068f71339';
+String _$artistViewModelHash() => r'1e9c81d135e420aa063c3aa453a5e2e47277d21b';
 
-/// ───────────────── VIEWMODEL: OPERAZIONI MUTABILI ───────────
-///
-/// Per create / update / delete + gestione "recent artists".
-///
-/// Uso:
-///   final vm = ref.read(artistViewModelProvider.notifier);
-///   vm.createArtist(...);
-///
-///   ref.listen(artistViewModelProvider, (prev, next) { ... });
-///
-/// Copied from [ArtistViewModel].
+/// See also [ArtistViewModel].
 @ProviderFor(ArtistViewModel)
 final artistViewModelProvider =
     AutoDisposeNotifierProvider<ArtistViewModel, AsyncValue?>.internal(
@@ -377,4 +333,4 @@ final artistViewModelProvider =
 
 typedef _$ArtistViewModel = AutoDisposeNotifier<AsyncValue?>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

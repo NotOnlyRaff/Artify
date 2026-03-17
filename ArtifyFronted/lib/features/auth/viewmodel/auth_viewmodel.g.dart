@@ -6,7 +6,7 @@ part of 'auth_viewmodel.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$authViewModelHash() => r'6859caf2dedb82dbb307b6e5a5e38668da03c165';
+String _$authViewModelHash() => r'6b53f655912339248d1532d714a882312e1c969e';
 
 /// See also [AuthViewModel].
 @ProviderFor(AuthViewModel)
@@ -23,4 +23,4 @@ final authViewModelProvider =
 
 typedef _$AuthViewModel = AutoDisposeAsyncNotifier<UserModel?>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

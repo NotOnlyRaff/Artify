@@ -109,37 +109,15 @@ def favorite_song(
     return {"message": is_added}
 
 
-@router.delete("/{song_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{song_id}", status_code=status.HTTP_200_OK)
 def delete_song(
     song_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
-    # 1. Recupera la canzone dal database (immagino tu abbia un metodo nel service)
-    song = SongService.get_song_by_id(db, song_id)
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-
-    # 2. Controllo di Ownership
-    if current_user.role == UserRole.ARTIST:
-        # Se l'utente non ha un profilo artista associato
-        if not current_user.artist_id:
-            raise HTTPException(status_code=403, detail="Current artist user has no linked artist profile")
-        
-        # Recupera gli ID degli artisti associati a questa canzone
-        # (Dipende da come hai modellato la relazione in SQLAlchemy, presumibilmente song.artists)
-        song_artist_ids = [artist.id for artist in song.artists]
-        
-        # Se l'ID dell'artista loggato NON è tra i proprietari della canzone, blocca!
-        # Oppure, se vuoi essere ancora più stringente: if current_user.artist_id != song_artist_ids[0] (solo il creatore primario può cancellare)
-        if current_user.artist_id not in song_artist_ids:
-            raise HTTPException(
-                status_code=403, 
-                detail="You don't have permission to delete a song you don't own"
-            )
-
-    # 3. Se l'utente è ADMIN, salta il blocco if sopra e arriva dritto qui.
-    # Procedi con l'eliminazione effettiva (sia dal DB che eventualmente da Cloudinary)
-    SongService.delete_song(db, song_id)
-    
+    SongService.delete_song(
+        db=db,
+        song_id=song_id,
+        current_user=current_user,
+    )
     return {"message": "Song deleted successfully"}

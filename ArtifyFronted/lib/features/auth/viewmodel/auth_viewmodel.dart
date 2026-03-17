@@ -1,7 +1,8 @@
 import 'dart:typed_data';
+
 import 'package:client/core/failure/failure.dart';
-import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/auth/models/user_model.dart';
+import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/auth/repositories/auth_remote_repository.dart';
 import 'package:fpdart/fpdart.dart';
@@ -21,33 +22,66 @@ class AuthViewModel extends _$AuthViewModel {
       ref.read(currentUserNotifierProvider.notifier);
 
   @override
-  FutureOr<UserModel?> build() {
-    return null;
+  Future<UserModel?> build() async {
+    return _bootstrapSession();
   }
 
-  Future<void> signUpUser({
-    required String name,
-    required String email,
-    required String password,
-    required bool isArtist,
-  }) async {
-    state = const AsyncValue.loading();
-
-    final res = await _authRemoteRepository.signup(
-      name: name,
-      email: email,
-      password: password,
-      isArtist: isArtist,
-    );
-
-    state = switch (res) {
-      Left(value: final l) => AsyncValue.error(
-          l.message,
-          StackTrace.current,
-        ),
-      Right(value: final r) => AsyncValue.data(r),
-    };
+  Future<String?> _readStoredTokenOrNull() async {
+    final token = await _authLocalRepository.getToken();
+    if (token == null || token.isEmpty) return null;
+    return token;
   }
+
+  Future<String?> _currentSessionToken() async {
+    final stored = await _readStoredTokenOrNull();
+    if (stored != null) return stored;
+
+    final memoryToken = ref.read(currentUserNotifierProvider)?.token;
+    if (memoryToken == null || memoryToken.isEmpty) return null;
+
+    return memoryToken;
+  }
+
+  UserModel _withToken(UserModel user, String token) {
+    return user.copyWith(token: token);
+  }
+
+  Future<UserModel?> _bootstrapSession() async {
+    final token = await _readStoredTokenOrNull();
+
+    if (token == null) {
+      _currentUserNotifier.clearUser();
+      return null;
+    }
+
+    final res = await _authRemoteRepository.getCurrentUserData(token);
+
+    switch (res) {
+      case Left():
+        await _authLocalRepository.removeToken();
+        _currentUserNotifier.clearUser();
+        return null;
+
+      case Right(value: final user):
+        final safeUser = _withToken(user, token);
+        _currentUserNotifier.setUser(safeUser);
+        return safeUser;
+    }
+  }
+
+Future<Either<AppFailure, UserModel>> signUpUser({
+  required String name,
+  required String email,
+  required String password,
+  required bool isArtist,
+}) async {
+  return await _authRemoteRepository.signup(
+    name: name,
+    email: email,
+    password: password,
+    isArtist: isArtist,
+  );
+}
 
   Future<void> loginUser({
     required String email,
@@ -63,39 +97,32 @@ class AuthViewModel extends _$AuthViewModel {
     switch (res) {
       case Left(value: final l):
         state = AsyncValue.error(l.message, StackTrace.current);
-        break;
 
-      case Right(value: final r):
-        await _authLocalRepository.setToken(r.token);
-        _currentUserNotifier.setUser(r);
-        state = AsyncValue.data(r);
-        break;
+      case Right(value: final user):
+        await _authLocalRepository.setToken(user.token);
+        final safeUser = _withToken(user, user.token);
+        _currentUserNotifier.setUser(safeUser);
+        state = AsyncValue.data(safeUser);
     }
   }
 
-  Future<UserModel?> getData() async {
-    state = const AsyncValue.loading();
-
-    final token = await _authLocalRepository.getToken();
-
-    if (token == null || token.isEmpty) {
-      state = const AsyncValue.data(null);
-      return null;
-    }
-
-    final res = await _authRemoteRepository.getCurrentUserData(token);
+  Future<Either<AppFailure, String>> loginForArtistOnboarding({
+    required String email,
+    required String password,
+  }) async {
+    final res = await _authRemoteRepository.login(
+      email: email,
+      password: password,
+    );
 
     switch (res) {
       case Left(value: final l):
-        await _authLocalRepository.removeToken();
-        _currentUserNotifier.clearUser();
-        state = AsyncValue.error(l.message, StackTrace.current);
-        return null;
+        return Left(l);
 
-      case Right(value: final r):
-        _currentUserNotifier.setUser(r);
-        state = AsyncValue.data(r);
-        return r;
+      case Right(value: final user):
+        // Nessun side effect globale.
+        // Il token resta locale al flow di onboarding.
+        return Right(user.token);
     }
   }
 
@@ -108,60 +135,42 @@ class AuthViewModel extends _$AuthViewModel {
   Future<void> refreshUserData() async {
     state = const AsyncValue.loading();
 
-    final token = await _authLocalRepository.getToken();
-
-    if (token == null || token.isEmpty) {
-      state = const AsyncValue.data(null);
-      return;
-    }
-
-    final res = await _authRemoteRepository.getCurrentUserData(token);
-
-    switch (res) {
-      case Left(value: final l):
-        await _authLocalRepository.removeToken();
-        _currentUserNotifier.clearUser();
-        state = AsyncValue.error(l.message, StackTrace.current);
-        break;
-
-      case Right(value: final r):
-        _currentUserNotifier.setUser(r);
-        state = AsyncValue.data(r);
-        break;
-    }
+    final refreshedUser = await _bootstrapSession();
+    state = AsyncValue.data(refreshedUser);
   }
 
   Future<void> updateUserData(UserModel updatedUser) async {
     state = const AsyncValue.loading();
 
-    final token = await _authLocalRepository.getToken();
+    final token = await _currentSessionToken();
 
-    if (token == null || token.isEmpty) {
+    if (token == null) {
+      await _authLocalRepository.removeToken();
+      _currentUserNotifier.clearUser();
       state = const AsyncValue.data(null);
       return;
     }
 
-    // Qui potresti aggiungere una chiamata al backend per aggiornare i dati dell'utente
-    // Ad esempio: await _authRemoteRepository.updateUserData(updatedUser);
-
-    // Per ora, aggiorniamo solo lo stato locale
-    _currentUserNotifier.setUser(updatedUser);
-    state = AsyncValue.data(updatedUser);
+    final safeUser = updatedUser.copyWith(token: token);
+    _currentUserNotifier.setUser(safeUser);
+    state = AsyncValue.data(safeUser);
   }
 
   Future<void> updateUserName(String newName) async {
     state = const AsyncValue.loading();
+
+    final currentToken = await _currentSessionToken();
+
     final res = await _authRemoteRepository.updateProfile(name: newName);
 
     switch (res) {
       case Left(value: final l):
         state = AsyncValue.error(l.message, StackTrace.current);
-        break;
 
       case Right(value: final updatedUser):
-        _currentUserNotifier.setUser(updatedUser);
-        state = AsyncValue.data(updatedUser);
-        break;
+        final safeUser = updatedUser.copyWith(token: currentToken ?? '');
+        _currentUserNotifier.setUser(safeUser);
+        state = AsyncValue.data(safeUser);
     }
   }
 
@@ -178,6 +187,8 @@ class AuthViewModel extends _$AuthViewModel {
   Future<void> updateProfilePicture(String imageUrl) async {
     state = const AsyncValue.loading();
 
+    final currentToken = await _currentSessionToken();
+
     final res = await _authRemoteRepository.updateProfile(
       profilePicUrl: imageUrl,
     );
@@ -185,12 +196,11 @@ class AuthViewModel extends _$AuthViewModel {
     switch (res) {
       case Left(value: final l):
         state = AsyncValue.error(l.message, StackTrace.current);
-        break;
 
       case Right(value: final updatedUser):
-        _currentUserNotifier.setUser(updatedUser);
-        state = AsyncValue.data(updatedUser);
-        break;
+        final safeUser = updatedUser.copyWith(token: currentToken ?? '');
+        _currentUserNotifier.setUser(safeUser);
+        state = AsyncValue.data(safeUser);
     }
   }
 
@@ -199,6 +209,8 @@ class AuthViewModel extends _$AuthViewModel {
 
     final currentUser = ref.read(currentUserNotifierProvider);
     if (currentUser == null) {
+      await _authLocalRepository.removeToken();
+      _currentUserNotifier.clearUser();
       state = const AsyncValue.data(null);
       return;
     }
@@ -208,13 +220,11 @@ class AuthViewModel extends _$AuthViewModel {
     switch (res) {
       case Left(value: final l):
         state = AsyncValue.error(l.message, StackTrace.current);
-        break;
 
       case Right():
         await _authLocalRepository.removeToken();
         _currentUserNotifier.clearUser();
         state = const AsyncValue.data(null);
-        break;
     }
   }
 
@@ -240,57 +250,6 @@ class AuthViewModel extends _$AuthViewModel {
         final currentUser = ref.read(currentUserNotifierProvider);
         state = AsyncValue.data(currentUser);
         return Right(message);
-    }
-  }
-
-  Future<Either<AppFailure, UserModel>> signUpUserResult({
-    required String name,
-    required String email,
-    required String password,
-    required bool isArtist,
-  }) async {
-    state = const AsyncValue.loading();
-
-    final res = await _authRemoteRepository.signup(
-      name: name,
-      email: email,
-      password: password,
-      isArtist: isArtist,
-    );
-
-    switch (res) {
-      case Left(value: final l):
-        state = AsyncValue.error(l.message, StackTrace.current);
-        return Left(l);
-
-      case Right(value: final user):
-        state = AsyncValue.data(user);
-        return Right(user);
-    }
-  }
-
-  Future<Either<AppFailure, String>> loginForArtistOnboarding({
-    required String email,
-    required String password,
-  }) async {
-    state = const AsyncValue.loading();
-
-    final res = await _authRemoteRepository.login(
-      email: email,
-      password: password,
-    );
-
-    switch (res) {
-      case Left(value: final l):
-        state = AsyncValue.error(l.message, StackTrace.current);
-        return Left(l);
-
-      case Right(value: final user):
-        await _authLocalRepository.setToken(user.token);
-
-        // Non toccare currentUserNotifier qui.
-        state = const AsyncValue.data(null);
-        return Right(user.token);
     }
   }
 }

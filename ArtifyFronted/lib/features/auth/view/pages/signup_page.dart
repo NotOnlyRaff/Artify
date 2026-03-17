@@ -11,6 +11,7 @@ import 'package:client/features/auth/view/widgets/signup_header.dart';
 import 'package:client/features/auth/viewmodel/auth_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
 
 class SignupPage extends ConsumerStatefulWidget {
   const SignupPage({super.key});
@@ -26,6 +27,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   final formKey = GlobalKey<FormState>();
 
   bool _passwordVisible = false;
+  bool _isSubmitting = false;
   bool isArtist = false;
 
   @override
@@ -38,12 +40,9 @@ class _SignupPageState extends ConsumerState<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authViewModelProvider);
-    final isLoading = authState.isLoading;
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: isLoading
+      body: _isSubmitting
           ? const Center(child: Loader())
           : Container(
               decoration: const BoxDecoration(
@@ -152,15 +151,22 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                   });
                 },
               ),
-              validator: (val) =>
-                  val == null || val.isEmpty ? 'Enter your password' : null,
+              validator: (val) {
+                if (val == null || val.isEmpty) {
+                  return 'Enter your password';
+                }
+                if (val.length < 8) {
+                  return 'Password must be at least 8 characters';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 22),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: () => _handleSubmit(context),
+                onPressed: _isSubmitting ? null : () => _handleSubmit(context),
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(
@@ -205,6 +211,8 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   }
 
   Future<void> _handleSubmit(BuildContext context) async {
+    if (_isSubmitting) return;
+
     if (!formKey.currentState!.validate()) {
       showSnackBar(context, 'Missing fields!');
       return;
@@ -231,28 +239,39 @@ class _SignupPageState extends ConsumerState<SignupPage> {
       return;
     }
 
-    await ref.read(authViewModelProvider.notifier).signUpUser(
-          name: name,
-          email: email,
-          password: password,
-          isArtist: false,
-        );
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    final state = ref.read(authViewModelProvider);
+    try {
+      final res = await ref.read(authViewModelProvider.notifier).signUpUser(
+            name: name,
+            email: email,
+            password: password,
+            isArtist: false,
+          );
 
-    if (state.hasError) {
       if (!mounted) return;
-      showSnackBar(context, state.error.toString());
-      return;
-    }
 
-    if (state.valueOrNull != null) {
-      if (!mounted) return;
-      showSnackBar(context, 'Account created successfully! Please login.');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+      switch (res) {
+        case Left(value: final failure):
+          showSnackBar(context, failure.message);
+          return;
+
+        case Right():
+          showSnackBar(context, 'Account created successfully! Please login.');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginPage()),
+          );
+          return;
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 }

@@ -6,7 +6,7 @@ part of 'album_viewmodel.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$getAllAlbumsHash() => r'49097120c0c231bb9b4bf4742d9a681cefbd220b';
+String _$getAllAlbumsHash() => r'821a89e0721124e9d620f4c3fcaae4ea3e5361ad';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -31,36 +31,20 @@ class _SystemHash {
 
 /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
 ///
-/// Uso:
-///   ref.watch(getAllAlbumsProvider());
-///   ref.watch(getAllAlbumsProvider(artistId: '...'));
-///
 /// Copied from [getAllAlbums].
 @ProviderFor(getAllAlbums)
 const getAllAlbumsProvider = GetAllAlbumsFamily();
 
 /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
 ///
-/// Uso:
-///   ref.watch(getAllAlbumsProvider());
-///   ref.watch(getAllAlbumsProvider(artistId: '...'));
-///
 /// Copied from [getAllAlbums].
 class GetAllAlbumsFamily extends Family<AsyncValue<List<AlbumModel>>> {
   /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getAllAlbumsProvider());
-  ///   ref.watch(getAllAlbumsProvider(artistId: '...'));
   ///
   /// Copied from [getAllAlbums].
   const GetAllAlbumsFamily();
 
   /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getAllAlbumsProvider());
-  ///   ref.watch(getAllAlbumsProvider(artistId: '...'));
   ///
   /// Copied from [getAllAlbums].
   GetAllAlbumsProvider call({
@@ -97,17 +81,9 @@ class GetAllAlbumsFamily extends Family<AsyncValue<List<AlbumModel>>> {
 
 /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
 ///
-/// Uso:
-///   ref.watch(getAllAlbumsProvider());
-///   ref.watch(getAllAlbumsProvider(artistId: '...'));
-///
 /// Copied from [getAllAlbums].
 class GetAllAlbumsProvider extends AutoDisposeFutureProvider<List<AlbumModel>> {
   /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getAllAlbumsProvider());
-  ///   ref.watch(getAllAlbumsProvider(artistId: '...'));
   ///
   /// Copied from [getAllAlbums].
   GetAllAlbumsProvider({
@@ -178,8 +154,6 @@ class GetAllAlbumsProvider extends AutoDisposeFutureProvider<List<AlbumModel>> {
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin GetAllAlbumsRef on AutoDisposeFutureProviderRef<List<AlbumModel>> {
   /// The parameter `artistId` of this provider.
   String? get artistId;
@@ -194,12 +168,9 @@ class _GetAllAlbumsProviderElement
   String? get artistId => (origin as GetAllAlbumsProvider).artistId;
 }
 
-String _$getAlbumHash() => r'794087249b1c48f2eaba740f40927fb591dadcf6';
+String _$getAlbumHash() => r'90243bca05eee7309f291140c8ab3e089a2c9903';
 
 /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
-///
-/// Uso:
-///   ref.watch(getAlbumProvider(albumId));
 ///
 /// Copied from [getAlbum].
 @ProviderFor(getAlbum)
@@ -207,23 +178,14 @@ const getAlbumProvider = GetAlbumFamily();
 
 /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
 ///
-/// Uso:
-///   ref.watch(getAlbumProvider(albumId));
-///
 /// Copied from [getAlbum].
 class GetAlbumFamily extends Family<AsyncValue<AlbumModel>> {
   /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getAlbumProvider(albumId));
   ///
   /// Copied from [getAlbum].
   const GetAlbumFamily();
 
   /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getAlbumProvider(albumId));
   ///
   /// Copied from [getAlbum].
   GetAlbumProvider call(
@@ -260,15 +222,9 @@ class GetAlbumFamily extends Family<AsyncValue<AlbumModel>> {
 
 /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
 ///
-/// Uso:
-///   ref.watch(getAlbumProvider(albumId));
-///
 /// Copied from [getAlbum].
 class GetAlbumProvider extends AutoDisposeFutureProvider<AlbumModel> {
   /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
-  ///
-  /// Uso:
-  ///   ref.watch(getAlbumProvider(albumId));
   ///
   /// Copied from [getAlbum].
   GetAlbumProvider(
@@ -338,8 +294,6 @@ class GetAlbumProvider extends AutoDisposeFutureProvider<AlbumModel> {
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin GetAlbumRef on AutoDisposeFutureProviderRef<AlbumModel> {
   /// The parameter `albumId` of this provider.
   String get albumId;
@@ -353,7 +307,7 @@ class _GetAlbumProviderElement
   String get albumId => (origin as GetAlbumProvider).albumId;
 }
 
-String _$albumViewModelHash() => r'95647de89dcb7a88b85a19fe739fdab2ce0a15cb';
+String _$albumViewModelHash() => r'0026f054c7f399bf075093f2ca08cf837cd7aae3';
 
 /// ───────────────── VIEWMODEL MUTAZIONI ALBUM ─────────────
 ///
@@ -372,4 +326,4 @@ final albumViewModelProvider =
 
 typedef _$AlbumViewModel = AutoDisposeNotifier<AsyncValue?>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

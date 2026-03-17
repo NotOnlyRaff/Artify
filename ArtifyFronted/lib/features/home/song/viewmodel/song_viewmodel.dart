@@ -1,20 +1,28 @@
 import 'package:client/core/failure/failure.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/features/auth/providers/current_user_notifier.dart';
+import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:client/features/home/song/repositories/song_remote_repository.dart';
-import 'package:client/core/utils.dart'; // PickedMedia
 import 'package:fpdart/fpdart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'song_viewmodel.g.dart';
 
+Future<String> _readStoredToken() async {
+  final token = await AuthLocalRepository().getToken();
+  if (token == null || token.isEmpty) {
+    throw Exception('User not authenticated');
+  }
+  return token;
+}
+
 /// ───────────────── PROVIDER LISTA SONG ─────────────────
 
 @riverpod
 Future<List<SongModel>> getAllSongs(GetAllSongsRef ref) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
+  final token = await _readStoredToken();
   final res = await ref.watch(songRemoteRepositoryProvider).getAllSongs(
         token: token,
       );
@@ -27,8 +35,7 @@ Future<List<SongModel>> getAllSongs(GetAllSongsRef ref) async {
 
 @riverpod
 Future<List<SongModel>> getFavSongs(GetFavSongsRef ref) async {
-  final token =
-      ref.watch(currentUserNotifierProvider.select((user) => user!.token));
+  final token = await _readStoredToken();
   final res = await ref.watch(songRemoteRepositoryProvider).getFavSongs(
         token: token,
       );
@@ -40,25 +47,30 @@ Future<List<SongModel>> getFavSongs(GetFavSongsRef ref) async {
 }
 
 /// ───────────────── VIEWMODEL CANZONI ─────────────────
-/// Gestisce:
-/// - upload song
-/// - delete song
-/// - toggle favorite
-/// - recently played (via SongLocalRepository)
 @riverpod
 class SongViewModel extends _$SongViewModel {
   SongRemoteRepository get _songRepository =>
       ref.read(songRemoteRepositoryProvider);
+
   SongLocalRepository get _songLocalRepository =>
       ref.read(songLocalRepositoryProvider);
 
+  AuthLocalRepository get _authLocalRepository => AuthLocalRepository();
+
   @override
   AsyncValue? build() {
-    // stato iniziale: nessuna operazione in corso
     return null;
   }
 
-  // ────────────── UPLOAD SONG (V2) ──────────────
+  Future<String> _requireToken() async {
+    final token = await _authLocalRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('User not authenticated');
+    }
+    return token;
+  }
+
+  /// ────────────── UPLOAD SONG ──────────────
   Future<void> uploadSong({
     required PickedMedia selectedAudio,
     required PickedMedia selectedThumbnail,
@@ -69,14 +81,9 @@ class SongViewModel extends _$SongViewModel {
     String? genre,
     String? lyrics,
     String? mood,
-    List<String> artistIds = const [], // 👈 nuovo
+    List<String> artistIds = const [],
   }) async {
-    state = const AsyncValue.loading();
-
-    final token = ref.read(currentUserNotifierProvider)!.token;
-    final repo = ref.read(songRemoteRepositoryProvider);
-
-    final res = await repo.uploadSong(
+    await uploadSongResult(
       selectedAudio: selectedAudio,
       selectedThumbnail: selectedThumbnail,
       songName: songName,
@@ -86,102 +93,133 @@ class SongViewModel extends _$SongViewModel {
       genre: genre,
       lyrics: lyrics,
       mood: mood,
-      artistIds: artistIds, // 👈 passiamo giù
-      token: token,
+      artistIds: artistIds,
     );
+  }
 
-    switch (res) {
-      case Left(value: final AppFailure failure):
-        state = AsyncValue.error(failure.message, StackTrace.current);
+  Future<Either<AppFailure, SongModel>> uploadSongResult({
+    required PickedMedia selectedAudio,
+    required PickedMedia selectedThumbnail,
+    required String songName,
+    required DateTime releaseDate,
+    required String composerName,
+    String? producerName,
+    String? genre,
+    String? lyrics,
+    String? mood,
+    List<String> artistIds = const [],
+  }) async {
+    state = const AsyncValue.loading();
 
-      case Right(value: final SongModel song):
-        // se vuoi, potresti salvare subito nei "recently played"
-        // _songLocalRepository.saveRecentlyPlayed(song);
+    try {
+      final token = await _requireToken();
 
-        // aggiorna la lista canzoni globale
-        ref.invalidate(getAllSongsProvider);
+      final res = await _songRepository.uploadSong(
+        selectedAudio: selectedAudio,
+        selectedThumbnail: selectedThumbnail,
+        songName: songName,
+        releaseDate: releaseDate,
+        composerName: composerName,
+        producerName: producerName,
+        genre: genre,
+        lyrics: lyrics,
+        mood: mood,
+        artistIds: artistIds,
+        token: token,
+      );
 
-        state = AsyncValue.data(song);
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+          return Left(failure);
+
+        case Right(value: final song):
+          ref.invalidate(getAllSongsProvider);
+          state = AsyncValue.data(song);
+          return Right(song);
+      }
+    } catch (e) {
+      final failure = AppFailure(e.toString());
+      state = AsyncValue.error(failure.message, StackTrace.current);
+      return Left(failure);
     }
   }
 
-  // ────────────── DELETE SONG ──────────────
+  /// ────────────── DELETE SONG ──────────────
   Future<void> deleteSong({required String songId}) async {
     state = const AsyncValue.loading();
 
-    final res = await _songRepository.deleteSong(
-      songId: songId,
-      token: ref.read(currentUserNotifierProvider)!.token,
-    );
+    try {
+      final token = await _requireToken();
 
-    switch (res) {
-      case Left(:final value):
-        state = AsyncValue.error(value.message, StackTrace.current);
-      case Right(:final value):
-        if (value) {
-          // ricarica lista generale
-          ref.invalidate(getAllSongsProvider);
-        }
-        state = AsyncValue.data(value);
+      final res = await _songRepository.deleteSong(
+        songId: songId,
+        token: token,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+
+        case Right(value: final success):
+          if (success) {
+            ref.invalidate(getAllSongsProvider);
+            ref.invalidate(getFavSongsProvider);
+          }
+          state = AsyncValue.data(success);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }
 
-  // ────────────── RECENTLY PLAYED ──────────────
+  /// ────────────── RECENTLY PLAYED ──────────────
   List<SongModel> getRecentlyPlayedSongs() {
     return _songLocalRepository.loadRecentlyPlayed();
   }
 
-  // ────────────── FAVORITE TOGGLE ──────────────
+  /// ────────────── FAVORITE TOGGLE ──────────────
   Future<void> favSong({required String songId}) async {
     state = const AsyncValue.loading();
 
-    final res = await _songRepository.favSong(
-      songId: songId,
-      token: ref.read(currentUserNotifierProvider)!.token,
-    );
+    try {
+      final token = await _requireToken();
 
-    final val = switch (res) {
-      Left(value: final l) => state =
-          AsyncValue.error(l.message, StackTrace.current),
-      Right(value: final r) => _favSongSuccess(r, songId),
-    };
-    // debug se ti serve
-    print(val);
+      final res = await _songRepository.favSong(
+        songId: songId,
+        token: token,
+      );
+
+      switch (res) {
+        case Left(value: final l):
+          state = AsyncValue.error(l.message, StackTrace.current);
+
+        case Right(value: final isFavorited):
+          _applyFavoriteLocally(isFavorited, songId);
+          ref.invalidate(getFavSongsProvider);
+          ref.invalidate(getAllSongsProvider);
+          state = AsyncValue.data(isFavorited);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
+    }
   }
 
-  AsyncValue _favSongSuccess(bool isFavorited, String songId) {
+  void _applyFavoriteLocally(bool isFavorited, String songId) {
+    final currentUser = ref.read(currentUserNotifierProvider);
+    if (currentUser == null) return;
+
     final userNotifier = ref.read(currentUserNotifierProvider.notifier);
-    final currentUser = ref.read(currentUserNotifierProvider)!;
+    final currentFavs = currentUser.favorites;
 
-    // favorites ora è List<String> (lista di songId)
-    final List<String> currentFavs = currentUser.favorites;
+    final updatedFavs = isFavorited
+        ? <String>{...currentFavs, songId}.toList()
+        : currentFavs.where((id) => id != songId).toList();
 
-    if (isFavorited) {
-      // aggiungo l'id se non già presente
-      final updatedFavs = <String>{
-        ...currentFavs,
-        songId,
-      }.toList();
-
-      userNotifier.setUser(
-        currentUser.copyWith(
-          favorites: updatedFavs,
-        ),
-      );
-    } else {
-      // rimuovo l'id
-      final updatedFavs = currentFavs.where((id) => id != songId).toList();
-
-      userNotifier.setUser(
-        currentUser.copyWith(
-          favorites: updatedFavs,
-        ),
-      );
-    }
-
-    // ricarica provider dei preferiti remoti
-    ref.invalidate(getFavSongsProvider);
-
-    return state = AsyncValue.data(isFavorited);
+    userNotifier.setUser(
+      currentUser.copyWith(
+        favorites: updatedFavs,
+      ),
+    );
   }
 }

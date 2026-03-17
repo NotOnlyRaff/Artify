@@ -8,6 +8,7 @@ from models.favorite import Favorite
 from models.songArtist import SongArtist, SongArtistRole
 from models.artist import Artist
 from core.config import settings
+from models.user import User, UserRole
 
 
 class SongService:
@@ -139,3 +140,40 @@ class SongService:
             raise HTTPException(status_code=404, detail="Song not found")
 
         return song
+
+    @staticmethod
+    def delete_song(db, song_id: str, current_user: User) -> None:
+        song = (
+            db.query(Song)
+            .options(joinedload(Song.song_artist_links))
+            .filter(Song.id == song_id)
+            .first()
+        )
+
+        if not song:
+            raise HTTPException(
+                status_code=404,
+                detail="Song not found",
+            )
+
+        is_admin = current_user.role == UserRole.ADMIN
+        is_artist_owner = any(
+            link.artist_id == current_user.artist_id
+            for link in song.song_artist_links
+        )
+
+        if not is_admin and not is_artist_owner:
+            raise HTTPException(
+                status_code= 403,
+                detail="You do not have permission to delete this song",
+            )
+
+        try:
+            db.delete(song)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Song deletion failed: {str(e)}",
+            )

@@ -47,7 +47,7 @@ dependencies:
   just_audio: ^0.10.5
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  isar_flutter_libs: ^4.0.0-dev.13
+  isar_flutter_libs: ^3.1.0+1
   path_provider: ^2.1.0
   just_audio_background: ^0.0.1-beta.12
   mime: ^2.0.0
@@ -70,7 +70,7 @@ dev_dependencies:
   riverpod_generator: ^2.4.0
   build_runner: ^2.4.10
   riverpod_lint: ^2.3.10
-  custom_lint: ^0.7.0
+  custom_lint: ^0.6.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

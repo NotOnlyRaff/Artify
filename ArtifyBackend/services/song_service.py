@@ -27,14 +27,15 @@ class SongService:
                 detail="A song must have at least one artist"
             )
 
-        # deduplica finale di sicurezza
         artist_ids = list(dict.fromkeys(artist_ids))
 
-        # verifica che tutti gli artisti esistano
         artists = db.query(Artist).filter(Artist.id.in_(artist_ids)).all()
         found_artist_ids = {artist.id for artist in artists}
 
-        missing_artist_ids = [artist_id for artist_id in artist_ids if artist_id not in found_artist_ids]
+        missing_artist_ids = [
+            artist_id for artist_id in artist_ids
+            if artist_id not in found_artist_ids
+        ]
         if missing_artist_ids:
             raise HTTPException(
                 status_code=404,
@@ -52,6 +53,7 @@ class SongService:
                 cloud_name=settings.CLOUDINARY_CLOUD_NAME,
                 api_key=settings.CLOUDINARY_API_KEY,
                 api_secret=settings.CLOUDINARY_API_SECRET,
+                secure=True,
             )
 
             # Upload thumbnail
@@ -62,13 +64,29 @@ class SongService:
                 cloud_name=settings.CLOUDINARY_CLOUD_NAME,
                 api_key=settings.CLOUDINARY_API_KEY,
                 api_secret=settings.CLOUDINARY_API_SECRET,
+                secure=True,
             )
+
+            song_url = song_res.get("secure_url")
+            thumbnail_url = thumb_res.get("secure_url")
+
+            if not song_url:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Cloudinary did not return a secure URL for the song file."
+                )
+
+            if not thumbnail_url:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Cloudinary did not return a secure URL for the thumbnail."
+                )
 
             new_song = Song(
                 id=song_id,
                 song_name=song_data["song_name"],
-                song_url=song_res["url"],
-                thumbnail_url=thumb_res["url"],
+                song_url=song_url,
+                thumbnail_url=thumbnail_url,
                 release_date=song_data["release_date"],
                 composer_name=song_data["composer_name"],
                 producer_name=song_data.get("producer_name"),
@@ -104,6 +122,15 @@ class SongService:
                 status_code=500,
                 detail=f"Failed to upload song: {str(e)}"
             )
+        finally:
+            try:
+                song_file.file.close()
+            except Exception:
+                pass
+            try:
+                thumbnail_file.file.close()
+            except Exception:
+                pass
 
     @staticmethod
     def toggle_favorite(db: Session, user_id: str, song_id: str):
@@ -129,7 +156,8 @@ class SongService:
             joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
             joinedload(Song.albums)
         ).all()
-    
+
+    @staticmethod
     def get_song_by_id(db: Session, song_id: str):
         song = db.query(Song).options(
             joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
@@ -164,7 +192,7 @@ class SongService:
 
         if not is_admin and not is_artist_owner:
             raise HTTPException(
-                status_code= 403,
+                status_code=403,
                 detail="You do not have permission to delete this song",
             )
 

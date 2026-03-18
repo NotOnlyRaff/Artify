@@ -27,7 +27,7 @@ jobs:
           cache: true
 
       - name: change directory
-        run: ls
+        run: cd ArtifyFronted
 
       - name: Flutter pub get
         run: flutter pub get

@@ -160,6 +160,20 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     }
   }
 
+  Future<void> stopAndClear() async {
+    debugPrint('[CurrentSongNotifier] stopAndClear() called');
+
+    try {
+      await _audioPlayer.stop();
+      debugPrint('[CurrentSongNotifier] audioPlayer.stop() DONE');
+    } catch (e, st) {
+      debugPrint('[CurrentSongNotifier] stopAndClear() ERROR: $e\n$st');
+    }
+
+    isPlaying = false;
+    state = null;
+  }
+
   void seek(double val) {
     final duration = _audioPlayer.duration;
     if (duration == null) return;

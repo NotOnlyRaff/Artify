@@ -50,6 +50,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     final pages = _buildPages(role);
     final safeIndex = _selectedIndex >= pages.length ? 0 : _selectedIndex;
 
+    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
@@ -57,8 +59,10 @@ class _HomePageState extends ConsumerState<HomePage> {
         children: [
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.only(
-                bottom: _bottomNavHeight + _musicSlabPaddingBottom + 8,
+              padding: EdgeInsets.only(
+                bottom: isKeyboardOpen
+                    ? _bottomNavHeight + 8
+                    : _bottomNavHeight + _musicSlabPaddingBottom + 8,
               ),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 350),
@@ -90,15 +94,16 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
           ),
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: _bottomNavHeight + _musicSlabPaddingBottom,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: MusicSlab(),
+          if (!isKeyboardOpen)
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: _bottomNavHeight + _musicSlabPaddingBottom,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: MusicSlab(),
+              ),
             ),
-          ),
         ],
       ),
       bottomNavigationBar: ArtifyBottomNav(

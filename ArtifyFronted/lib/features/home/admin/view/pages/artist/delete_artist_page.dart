@@ -1,7 +1,7 @@
 import 'package:client/core/utils.dart';
 import 'package:client/core/widgets/loader.dart';
-import 'package:client/features/home/admin/view/widgets/UploadArtist/delete_artist_search_bar.dart';
-import 'package:client/features/home/admin/view/widgets/UploadArtist/delete_artist_tile.dart';
+import 'package:client/features/home/admin/view/widgets/uploadArtist/delete_artist_search_bar.dart';
+import 'package:client/features/home/admin/view/widgets/uploadArtist/delete_artist_tile.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
 import 'package:flutter/material.dart';

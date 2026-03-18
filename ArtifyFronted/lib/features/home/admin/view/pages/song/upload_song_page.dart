@@ -9,10 +9,10 @@ import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/models/song_artist_model.dart';
 
 // Nuovi widget estratti
-import 'package:client/features/home/admin/view/widgets/UploadSong/upload_tab_switcher.dart';
-import 'package:client/features/home/admin/view/widgets/UploadSong/track_tab_content.dart';
-import 'package:client/features/home/admin/view/widgets/UploadSong/artists_tab_content.dart';
-import 'package:client/features/home/admin/view/widgets/UploadSong/details_tab_content.dart';
+import 'package:client/features/home/admin/view/widgets/uploadSong/upload_tab_switcher.dart';
+import 'package:client/features/home/admin/view/widgets/uploadSong/track_tab_content.dart';
+import 'package:client/features/home/admin/view/widgets/uploadSong/artists_tab_content.dart';
+import 'package:client/features/home/admin/view/widgets/uploadSong/details_tab_content.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

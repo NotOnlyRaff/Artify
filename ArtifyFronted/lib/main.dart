@@ -38,8 +38,12 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
 
+    Image.asset(
+      'assets/images/app_icon.png',
+      height: 100,
+    );
     return MaterialApp(
-      title: 'Music App',
+      title: 'Artify',
       theme: AppTheme.darkThemeMode,
       home: authState.when(
         loading: () => const Scaffold(

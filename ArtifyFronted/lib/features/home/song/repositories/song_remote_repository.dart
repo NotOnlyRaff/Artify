@@ -2,12 +2,13 @@ import 'dart:convert';
 
 import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
-import 'package:client/core/utils.dart'; // PickedMedia
+import 'package:client/core/utils.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart'; // IMPORTANTE: Necessario per definire il MediaType
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'song_remote_repository.g.dart';
@@ -29,7 +30,51 @@ class SongRemoteRepository {
         'x-auth-token': token,
       };
 
-  // ───────────────── UPLOAD SONG ─────────────────
+  MediaType _mediaTypeFromMime(String mimeType) {
+    final parts = mimeType.split('/');
+    if (parts.length != 2) {
+      throw Exception('Invalid MIME type: $mimeType');
+    }
+    return MediaType(parts[0], parts[1]);
+  }
+
+  MediaType _detectAudioMediaType({
+    required String fileName,
+    String? filePath,
+    List<int>? bytes,
+  }) {
+    final mimeType = lookupMimeType(
+      filePath ?? fileName,
+      headerBytes: bytes,
+    );
+
+    if (mimeType == null || !mimeType.startsWith('audio/')) {
+      throw Exception(
+        'Unsupported audio file type for "$fileName". Detected MIME: $mimeType',
+      );
+    }
+
+    return _mediaTypeFromMime(mimeType);
+  }
+
+  MediaType _detectImageMediaType({
+    required String fileName,
+    String? filePath,
+    List<int>? bytes,
+  }) {
+    final mimeType = lookupMimeType(
+      filePath ?? fileName,
+      headerBytes: bytes,
+    );
+
+    if (mimeType == null || !mimeType.startsWith('image/')) {
+      throw Exception(
+        'Unsupported image file type for "$fileName". Detected MIME: $mimeType',
+      );
+    }
+
+    return _mediaTypeFromMime(mimeType);
+  }
 
   Future<Either<AppFailure, SongModel>> uploadSong({
     required PickedMedia selectedAudio,
@@ -48,14 +93,11 @@ class SongRemoteRepository {
       final uri = _uri('/song/upload');
       final request = http.MultipartRequest('POST', uri);
 
-      // header auth (il middleware sul BE legge x-auth-token)
       request.headers.addAll(_authHeaders(token));
 
-      // ----- FORM FIELDS (devono combaciare con i parametri FastAPI) -----
       request.fields['song_name'] = songName.trim();
       request.fields['composer_name'] = composerName.trim();
 
-      // release_date: FastAPI si aspetta una date (YYYY-MM-DD)
       final releaseDateStr = releaseDate.toIso8601String().split('T').first;
       request.fields['release_date'] = releaseDateStr;
 
@@ -72,71 +114,90 @@ class SongRemoteRepository {
         request.fields['mood'] = mood.trim();
       }
 
-      // JSON con gli artist id
       if (artistIds.isNotEmpty) {
         request.fields['artist_ids_json'] = jsonEncode(artistIds);
       }
 
-      // ----- AUDIO FILE (FastAPI: song: UploadFile = File(...)) -----
+      // ----- AUDIO FILE -----
       if (kIsWeb) {
         if (selectedAudio.bytes == null) {
           return Left(AppFailure('Audio bytes are null on Web'));
         }
+
+        final audioMediaType = _detectAudioMediaType(
+          fileName: selectedAudio.name,
+          bytes: selectedAudio.bytes,
+        );
+
         request.files.add(
           http.MultipartFile.fromBytes(
-            'song', // ⚠️ deve chiamarsi "song" come nel BE
+            'song',
             selectedAudio.bytes!,
             filename: selectedAudio.name,
-            contentType: MediaType('audio', 'mpeg'), // ⚠️ FIX PER L'ERRORE 400
+            contentType: audioMediaType,
           ),
         );
       } else {
         if (selectedAudio.filePath == null) {
           return Left(AppFailure('Audio path is null on mobile'));
         }
+
+        final audioMediaType = _detectAudioMediaType(
+          fileName: selectedAudio.name,
+          filePath: selectedAudio.filePath,
+        );
+
         request.files.add(
           await http.MultipartFile.fromPath(
-            'song', // ⚠️ deve chiamarsi "song"
+            'song',
             selectedAudio.filePath!,
-            contentType: MediaType('audio', 'mpeg'), // ⚠️ FIX PER L'ERRORE 400
+            contentType: audioMediaType,
           ),
         );
       }
 
-      // ----- THUMBNAIL FILE (FastAPI: thumbnail: UploadFile = File(...)) -----
+      // ----- THUMBNAIL FILE -----
       if (kIsWeb) {
         if (selectedThumbnail.bytes == null) {
           return Left(AppFailure('Image bytes are null on Web'));
         }
+
+        final thumbnailMediaType = _detectImageMediaType(
+          fileName: selectedThumbnail.name,
+          bytes: selectedThumbnail.bytes,
+        );
+
         request.files.add(
           http.MultipartFile.fromBytes(
-            'thumbnail', // ⚠️ deve chiamarsi "thumbnail"
+            'thumbnail',
             selectedThumbnail.bytes!,
             filename: selectedThumbnail.name,
-            contentType:
-                MediaType('image', 'jpeg'), // Forziamo il tipo immagine
+            contentType: thumbnailMediaType,
           ),
         );
       } else {
         if (selectedThumbnail.filePath == null) {
           return Left(AppFailure('Image path is null on mobile'));
         }
+
+        final thumbnailMediaType = _detectImageMediaType(
+          fileName: selectedThumbnail.name,
+          filePath: selectedThumbnail.filePath,
+        );
+
         request.files.add(
           await http.MultipartFile.fromPath(
             'thumbnail',
             selectedThumbnail.filePath!,
-            contentType:
-                MediaType('image', 'jpeg'), // Forziamo il tipo immagine
+            contentType: thumbnailMediaType,
           ),
         );
       }
 
-      // ----- INVIO RICHIESTA -----
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode != 201 && response.statusCode != 200) {
-        // utile in debug
         print('UPLOAD ERROR STATUS: ${response.statusCode}');
         print('UPLOAD ERROR BODY: ${response.body}');
 
@@ -159,8 +220,6 @@ class SongRemoteRepository {
       return Left(AppFailure(e.toString()));
     }
   }
-
-  // ───────────────── DELETE SONG ─────────────────
 
   Future<Either<AppFailure, bool>> deleteSong({
     required String songId,
@@ -192,8 +251,6 @@ class SongRemoteRepository {
       return Left(AppFailure(e.toString()));
     }
   }
-
-  // ───────────────── LIST ALL SONGS ──────────────
 
   Future<Either<AppFailure, List<SongModel>>> getAllSongs({
     required String token,
@@ -234,8 +291,6 @@ class SongRemoteRepository {
     }
   }
 
-  // ───────────────── TOGGLE FAVORITE ─────────────
-
   Future<Either<AppFailure, bool>> favSong({
     required String token,
     required String songId,
@@ -264,7 +319,6 @@ class SongRemoteRepository {
         return Left(AppFailure('Invalid response format for favorite toggle'));
       }
 
-      // BE ritorna {"message": True/False}
       final msg = resBodyMap['message'];
       if (msg is bool) {
         return Right(msg);
@@ -275,8 +329,6 @@ class SongRemoteRepository {
       return Left(AppFailure(e.toString()));
     }
   }
-
-  // ───────────────── LIST FAVORITE SONGS ─────────
 
   Future<Either<AppFailure, List<SongModel>>> getFavSongs({
     required String token,
@@ -303,7 +355,6 @@ class SongRemoteRepository {
       final songs = <SongModel>[];
       for (final item in resBodyMap) {
         if (item is Map<String, dynamic>) {
-          // ⚠️ Ora il BE ritorna direttamente SongOut, NON più {"song": {...}}
           songs.add(SongModel.fromMap(item));
         } else if (item is Map) {
           songs.add(

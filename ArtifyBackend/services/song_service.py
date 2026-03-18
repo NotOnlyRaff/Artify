@@ -48,7 +48,7 @@ class SongService:
             # Upload audio
             song_res = cloudinary.uploader.upload(
                 song_file.file,
-                resource_type="auto",
+                resource_type="video",
                 folder=f"artify/songs/{song_id}",
                 cloud_name=settings.CLOUDINARY_CLOUD_NAME,
                 api_key=settings.CLOUDINARY_API_KEY,

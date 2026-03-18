@@ -110,17 +110,19 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
         '[CurrentSongNotifier] setAudioSource -> ${song.songUrl}',
       );
 
-      // 🔹 3) Configura la sorgente audio
-      await _audioPlayer.setAudioSource(audioSource);
-      debugPrint('[CurrentSongNotifier] setAudioSource DONE');
+      try {
+        await _audioPlayer.setAudioSource(audioSource);
+        await _audioPlayer.play();
+      } on PlayerException catch (e, st) {
+        debugPrint(
+            '[PLAYER EXCEPTION] code=${e.code} message=${e.message}\n$st');
+      } catch (e, st) {
+        debugPrint('[PLAYER ERROR] $e\n$st');
+      }
 
       // 🔹 4) Salva nei recently played (non blocca la UI)
       unawaited(_songLocalRepository.saveRecentlyPlayed(song));
       debugPrint('[CurrentSongNotifier] saved to recently played (async)');
-
-      // 🔹 5) Avvia riproduzione
-      await _audioPlayer.play();
-      debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
 
       isPlaying = true;
 

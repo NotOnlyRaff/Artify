@@ -7,18 +7,18 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          cd artifyfrontend
+          cd ArtifyFronted
           flutter pub get
           
       - name: Build iOS App (Senza Firma)
         script: |
-          cd artifyfrontend
+          cd ArtifyFronted
           # Usiamo 'ios' invece di 'ipa' per farci dare la Runner.app pura
           flutter build ios --release --no-codesign
           
       - name: Impacchetta l'IPA manualmente
         script: |
-          cd artifyfrontend
+          cd ArtifyFronted
           # Creiamo la cartella magica che si aspetta iOS
           mkdir -p Payload
           # Spostiamo l'app appena creata dentro Payload
@@ -28,4 +28,4 @@ workflows:
           
     artifacts:
       # Ora andiamo a pescare il file appena creato!
-      - artifyfrontend/artify.ipa
+      - ArtifyFronted/artify.ipa

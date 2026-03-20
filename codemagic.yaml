@@ -1,7 +1,7 @@
 workflows:
   ios-release-workflow:
     name: iOS Build
-    working_directory: artifyfrontend
+    working_directory: ArtifyFrontend
     max_build_duration: 60
     environment:
       flutter: stable

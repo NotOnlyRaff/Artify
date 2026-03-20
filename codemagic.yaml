@@ -1,16 +1,31 @@
 workflows:
   ios-release-workflow:
-    name: iOS Build
-    working_directory: ArtifyFronted
-    max_build_duration: 60
+    name: iOS Build (Artify)
     environment:
       flutter: stable
       xcode: latest
     scripts:
       - name: Install dependencies
-        script: flutter packages pub get
-      - name: Build IPA
-        # Usiamo --no-codesign se non hai ancora caricato i certificati su Codemagic
-        script: flutter build ipa --release --no-codesign
+        script: |
+          cd artifyfrontend
+          flutter pub get
+          
+      - name: Build iOS App (Senza Firma)
+        script: |
+          cd artifyfrontend
+          # Usiamo 'ios' invece di 'ipa' per farci dare la Runner.app pura
+          flutter build ios --release --no-codesign
+          
+      - name: Impacchetta l'IPA manualmente
+        script: |
+          cd artifyfrontend
+          # Creiamo la cartella magica che si aspetta iOS
+          mkdir -p Payload
+          # Spostiamo l'app appena creata dentro Payload
+          mv build/ios/iphoneos/Runner.app Payload/
+          # Zippiamo tutto e lo chiamiamo artify.ipa
+          zip -r artify.ipa Payload
+          
     artifacts:
-      - build/ios/ipa/*.ipa
+      # Ora andiamo a pescare il file appena creato!
+      - artifyfrontend/artify.ipa

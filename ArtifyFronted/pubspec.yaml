@@ -47,7 +47,6 @@ dependencies:
   just_audio: ^0.10.5
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  isar_flutter_libs: ^3.1.0+1
   path_provider: ^2.1.0
   just_audio_background: ^0.0.1-beta.12
   mime: ^2.0.0
@@ -71,10 +70,22 @@ dev_dependencies:
   build_runner: ^2.4.10
   riverpod_lint: ^2.3.10
   custom_lint: ^0.6.4
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
-
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/LogoArtify2.png"
+  # Per Android 8.0+ servono le icone adattive
+  adaptive_icon_background: "#000000" # Sfondo nero dietro la torre
+  adaptive_icon_foreground: "assets/images/LogoArtify2.png"
+  web:
+    generate: true
+    image_path: "assets/images/LogoArtify2.png"
+    background_color: "#000000"
+    theme_color: "#000000"
 # The following section is specific to Flutter packages.
 flutter:
   # The following line ensures that the Material Icons font is

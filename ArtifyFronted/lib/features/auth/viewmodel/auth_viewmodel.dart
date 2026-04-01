@@ -5,6 +5,8 @@ import 'package:client/features/auth/models/user_model.dart';
 import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/auth/repositories/auth_remote_repository.dart';
+import 'package:client/features/home/song/providers/current_song_notifier.dart';
+import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -46,6 +48,26 @@ class AuthViewModel extends _$AuthViewModel {
     return user.copyWith(token: token);
   }
 
+  Future<void> _clearAuthStateOnly() async {
+    await _authLocalRepository.removeToken();
+    _currentUserNotifier.clearUser();
+  }
+
+  Future<void> _clearSessionForExplicitLogout() async {
+    // Stop audio + clear current song
+    await ref.read(currentSongNotifierProvider.notifier).stopAndClear();
+
+    // Clear auth/session state
+    await _authLocalRepository.removeToken();
+    _currentUserNotifier.clearUser();
+
+    // Reset session-bound providers
+    ref.invalidate(currentSongNotifierProvider);
+    ref.invalidate(songViewModelProvider);
+    ref.invalidate(getAllSongsProvider);
+    ref.invalidate(getFavSongsProvider);
+  }
+
   Future<UserModel?> _bootstrapSession() async {
     final token = await _readStoredTokenOrNull();
 
@@ -69,19 +91,19 @@ class AuthViewModel extends _$AuthViewModel {
     }
   }
 
-Future<Either<AppFailure, UserModel>> signUpUser({
-  required String name,
-  required String email,
-  required String password,
-  required bool isArtist,
-}) async {
-  return await _authRemoteRepository.signup(
-    name: name,
-    email: email,
-    password: password,
-    isArtist: isArtist,
-  );
-}
+  Future<Either<AppFailure, UserModel>> signUpUser({
+    required String name,
+    required String email,
+    required String password,
+    required bool isArtist,
+  }) async {
+    return await _authRemoteRepository.signup(
+      name: name,
+      email: email,
+      password: password,
+      isArtist: isArtist,
+    );
+  }
 
   Future<void> loginUser({
     required String email,
@@ -120,15 +142,12 @@ Future<Either<AppFailure, UserModel>> signUpUser({
         return Left(l);
 
       case Right(value: final user):
-        // Nessun side effect globale.
-        // Il token resta locale al flow di onboarding.
         return Right(user.token);
     }
   }
 
   Future<void> logout() async {
-    await _authLocalRepository.removeToken();
-    _currentUserNotifier.clearUser();
+    await _clearSessionForExplicitLogout();
     state = const AsyncValue.data(null);
   }
 
@@ -145,8 +164,7 @@ Future<Either<AppFailure, UserModel>> signUpUser({
     final token = await _currentSessionToken();
 
     if (token == null) {
-      await _authLocalRepository.removeToken();
-      _currentUserNotifier.clearUser();
+      await _clearAuthStateOnly();
       state = const AsyncValue.data(null);
       return;
     }
@@ -209,8 +227,7 @@ Future<Either<AppFailure, UserModel>> signUpUser({
 
     final currentUser = ref.read(currentUserNotifierProvider);
     if (currentUser == null) {
-      await _authLocalRepository.removeToken();
-      _currentUserNotifier.clearUser();
+      await _clearSessionForExplicitLogout();
       state = const AsyncValue.data(null);
       return;
     }
@@ -222,8 +239,7 @@ Future<Either<AppFailure, UserModel>> signUpUser({
         state = AsyncValue.error(l.message, StackTrace.current);
 
       case Right():
-        await _authLocalRepository.removeToken();
-        _currentUserNotifier.clearUser();
+        await _clearSessionForExplicitLogout();
         state = const AsyncValue.data(null);
     }
   }

@@ -1,4 +1,5 @@
 import 'package:client/features/home/artist/view/pages/artist_detail_page.dart';
+import 'package:client/features/home/album/view/pages/album_detail_page.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/album/model/album_model.dart';
@@ -364,7 +365,11 @@ class _AlbumResultTile extends StatelessWidget {
           color: Colors.white54,
         ),
         onTap: () {
-          // TODO: apri pagina dettaglio album
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AlbumDetailPage(albumId: album.id),
+            ),
+          );
         },
       ),
     );

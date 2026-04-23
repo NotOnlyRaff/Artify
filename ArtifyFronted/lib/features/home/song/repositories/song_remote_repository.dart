@@ -4,6 +4,7 @@ import 'package:client/core/constants/server_constant.dart';
 import 'package:client/core/failure/failure.dart';
 import 'package:client/core/network/http_client_provider.dart';
 import 'package:client/core/utils.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fpdart/fpdart.dart';
@@ -107,12 +108,15 @@ class SongRemoteRepository {
     required PickedMedia selectedThumbnail,
     required String songName,
     required DateTime releaseDate,
-    required String composerName,
+    String? composerId,
+    String? composerName,
+    String? producerId,
     String? producerName,
     String? genre,
     String? lyrics,
     String? mood,
     List<String> artistIds = const [],
+    List<SongArtistModel> artistLinks = const [],
     required String token,
   }) async {
     try {
@@ -121,10 +125,18 @@ class SongRemoteRepository {
       request.headers.addAll(_authHeaders(token));
 
       request.fields['song_name'] = songName.trim();
-      request.fields['composer_name'] = composerName.trim();
       request.fields['release_date'] =
           releaseDate.toIso8601String().split('T').first;
 
+      if (composerId?.trim().isNotEmpty == true) {
+        request.fields['composer_id'] = composerId!.trim();
+      }
+      if (composerName?.trim().isNotEmpty == true) {
+        request.fields['composer_name'] = composerName!.trim();
+      }
+      if (producerId?.trim().isNotEmpty == true) {
+        request.fields['producer_id'] = producerId!.trim();
+      }
       if (producerName?.trim().isNotEmpty == true) {
         request.fields['producer_name'] = producerName!.trim();
       }
@@ -139,10 +151,25 @@ class SongRemoteRepository {
       // FIX: il backend ora si aspetta artist_links_json con {artist_id, role}
       // invece di artist_ids_json con lista piatta di ID.
       // Per retrocompatibilità, mappiamo la lista di ID a link con role "primary".
-      if (artistIds.isNotEmpty) {
-        final links = artistIds
-            .map((id) => {'artist_id': id, 'role': 'primary'})
-            .toList();
+      final resolvedArtistLinks = artistLinks
+          .where((link) => link.artistId?.trim().isNotEmpty == true)
+          .map(
+            (link) => {
+              'artist_id': link.artistId!.trim(),
+              'role': link.role.value,
+            },
+          )
+          .toList();
+
+      if (resolvedArtistLinks.isNotEmpty) {
+        request.fields['artist_links_json'] = jsonEncode(resolvedArtistLinks);
+      } else if (artistIds.isNotEmpty) {
+        final links = artistIds.asMap().entries.map((entry) {
+          return {
+            'artist_id': entry.value,
+            'role': entry.key == 0 ? 'primary' : 'featured',
+          };
+        }).toList();
         request.fields['artist_links_json'] = jsonEncode(links);
       }
 

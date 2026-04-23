@@ -2,6 +2,7 @@ import 'package:client/core/failure/failure.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/auth/repositories/auth_local_repository.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:client/features/home/song/repositories/song_remote_repository.dart';
@@ -96,24 +97,30 @@ class SongViewModel extends _$SongViewModel {
     required PickedMedia selectedThumbnail,
     required String songName,
     required DateTime releaseDate,
-    required String composerName,
+    String? composerId,
+    String? composerName,
+    String? producerId,
     String? producerName,
     String? genre,
     String? lyrics,
     String? mood,
     List<String> artistIds = const [],
+    List<SongArtistModel> artistLinks = const [],
   }) async {
     await uploadSongResult(
       selectedAudio: selectedAudio,
       selectedThumbnail: selectedThumbnail,
       songName: songName,
       releaseDate: releaseDate,
+      composerId: composerId,
       composerName: composerName,
+      producerId: producerId,
       producerName: producerName,
       genre: genre,
       lyrics: lyrics,
       mood: mood,
       artistIds: artistIds,
+      artistLinks: artistLinks,
     );
   }
 
@@ -122,12 +129,15 @@ class SongViewModel extends _$SongViewModel {
     required PickedMedia selectedThumbnail,
     required String songName,
     required DateTime releaseDate,
-    required String composerName,
+    String? composerId,
+    String? composerName,
+    String? producerId,
     String? producerName,
     String? genre,
     String? lyrics,
     String? mood,
     List<String> artistIds = const [],
+    List<SongArtistModel> artistLinks = const [],
   }) async {
     state = const AsyncValue.loading();
 
@@ -139,12 +149,15 @@ class SongViewModel extends _$SongViewModel {
         selectedThumbnail: selectedThumbnail,
         songName: songName,
         releaseDate: releaseDate,
+        composerId: composerId,
         composerName: composerName,
+        producerId: producerId,
         producerName: producerName,
         genre: genre,
         lyrics: lyrics,
         mood: mood,
         artistIds: artistIds,
+        artistLinks: artistLinks,
         token: token,
       );
 

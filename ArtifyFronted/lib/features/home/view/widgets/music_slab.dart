@@ -4,9 +4,11 @@ import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/features/auth/providers/current_user_notifier.dart';
 import 'package:client/features/home/models/fav_song_model.dart';
 import 'package:client/features/home/models/song_artist_model.dart';
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/providers/current_song_notifier.dart';
 import 'package:client/features/home/song/providers/playback_queue_controller.dart';
+import 'package:client/features/home/song/view/pages/playback_queue_page.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:client/features/home/view/widgets/music_player.dart';
 import 'package:flutter/cupertino.dart';
@@ -37,6 +39,7 @@ class MusicSlab extends ConsumerWidget {
     }
 
     final songNotifier = ref.read(currentSongNotifierProvider.notifier);
+    final queueController = ref.read(playbackQueueControllerProvider.notifier);
 
     final userFavorites = ref.watch(
       currentUserNotifierProvider.select(
@@ -45,14 +48,19 @@ class MusicSlab extends ConsumerWidget {
     );
 
     final isFav = userFavorites.any((fav) => fav == currentSong.id);
-    final queuedUpNext =
-        queueState.totalItems > 1 ? queueState.totalItems - 1 : 0;
+    final queuedUpNext = queueState.queuedCount;
+    final queueBadgeText = queuedUpNext > 9 ? '9+' : '$queuedUpNext';
 
     final size = MediaQuery.of(context).size;
     final slabWidth = size.width - 16;
     final slabHeight = 72.0;
+    final currentIndex = queueState.currentIndex ?? 0;
+    final canSkipNext = queueState.totalItems > 1 &&
+        (currentIndex < queueState.totalItems - 1 ||
+            queueState.repeatMode == PlaybackRepeatMode.all);
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         Navigator.of(context).push(
           PageRouteBuilder(
@@ -72,6 +80,17 @@ class MusicSlab extends ConsumerWidget {
             },
           ),
         );
+      },
+      onHorizontalDragEnd: (details) async {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity <= -240 && canSkipNext) {
+          await queueController.skipToNext();
+          return;
+        }
+
+        if (velocity >= 240) {
+          await queueController.skipToPrevious();
+        }
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -175,25 +194,47 @@ class MusicSlab extends ConsumerWidget {
                               ),
                               if (queuedUpNext > 0) ...[
                                 const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: Colors.white.withOpacity(0.08),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.06),
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const PlaybackQueuePage(),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
                                     ),
-                                  ),
-                                  child: Text(
-                                    'Next $queuedUpNext',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white70,
-                                      height: 1,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      color: Colors.white.withOpacity(0.08),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.06),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          CupertinoIcons.music_note_list,
+                                          size: 11,
+                                          color: Colors.white70,
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          queueBadgeText,
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white70,
+                                            height: 1,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -221,7 +262,7 @@ class MusicSlab extends ConsumerWidget {
                                 .favSong(songId: currentSong.id);
                           },
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 2),
                         Container(
                           width: 34,
                           height: 34,

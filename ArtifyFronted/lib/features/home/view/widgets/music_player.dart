@@ -95,6 +95,7 @@ class MusicPlayer extends ConsumerWidget {
     final artistName = _primaryArtistName(currentSong);
     final size = MediaQuery.of(context).size;
     final upcoming = queueState.upcomingItems;
+    final queuedCount = queueState.queuedCount;
     final queueSongs = queueState.items.map((item) => item.song).toList();
     final currentQueueIndex = queueState.currentIndex ?? 0;
 
@@ -141,7 +142,9 @@ class MusicPlayer extends ConsumerWidget {
                               ),
                             ),
                             Text(
-                              '${queueState.totalItems} track${queueState.totalItems == 1 ? '' : 's'} in queue',
+                              queuedCount == 0
+                                  ? 'No tracks queued after this one'
+                                  : '$queuedCount track${queuedCount == 1 ? '' : 's'} queued next',
                               style: const TextStyle(
                                 color: Colors.white38,
                                 fontSize: 11,
@@ -334,9 +337,8 @@ class MusicPlayer extends ConsumerWidget {
                                         min: 0,
                                         max: 1,
                                         onChanged: canSeek ? (_) {} : null,
-                                        onChangeEnd: canSeek
-                                            ? songNotifier.seek
-                                            : null,
+                                        onChangeEnd:
+                                            canSeek ? songNotifier.seek : null,
                                       ),
                                     ),
                                     Row(
@@ -535,19 +537,21 @@ class MusicPlayer extends ConsumerWidget {
                                   ),
                                 ),
                                 const Spacer(),
-                                Text(
-                                  '${queueState.totalItems}',
-                                  style: const TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                                if (queuedCount > 0)
+                                  Text(
+                                    queuedCount > 9 ? '9+' : '$queuedCount',
+                                    style: const TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
                                 IconButton(
                                   onPressed: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (_) => const PlaybackQueuePage(),
+                                        builder: (_) =>
+                                            const PlaybackQueuePage(),
                                       ),
                                     );
                                   },

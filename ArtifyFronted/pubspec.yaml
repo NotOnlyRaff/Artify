@@ -78,13 +78,14 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/LogoArtify2.png"
+  remove_alpha_ios: true
+  image_path: "assets/images/LogoArtify.png"
   # Per Android 8.0+ servono le icone adattive
-  adaptive_icon_background: "#000000" # Sfondo nero dietro la torre
-  adaptive_icon_foreground: "assets/images/LogoArtify2.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/LogoArtify.png"
   web:
     generate: true
-    image_path: "assets/images/LogoArtify2.png"
+    image_path: "assets/images/LogoArtify.png"
     background_color: "#000000"
     theme_color: "#000000"
 # The following section is specific to Flutter packages.

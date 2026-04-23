@@ -1,8 +1,10 @@
+import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/features/auth/models/user_model.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/artist/view/widgets/studiopage/artist_studio_shared.dart';
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
+import 'package:client/features/home/models/song_artist_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +31,9 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
 
   final _songNameController = TextEditingController();
   final _composerController = TextEditingController();
+  final _composerSearchController = TextEditingController();
   final _producerController = TextEditingController();
+  final _producerSearchController = TextEditingController();
   final _genreController = TextEditingController();
   final _moodController = TextEditingController();
   final _lyricsController = TextEditingController();
@@ -39,15 +43,24 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
   PickedMedia? _selectedThumbnail;
   DateTime? _releaseDate;
   bool _submitting = false;
+
   String _artistSearchQuery = '';
+  String _composerSearchQuery = '';
+  String _producerSearchQuery = '';
+
+  ArtistModel? _selectedComposerArtist;
+  ArtistModel? _selectedProducerArtist;
 
   final List<ArtistModel> _selectedFeaturingArtists = [];
+  final Map<String, SongArtistRole> _artistRoles = {};
 
   @override
   void dispose() {
     _songNameController.dispose();
     _composerController.dispose();
+    _composerSearchController.dispose();
     _producerController.dispose();
+    _producerSearchController.dispose();
     _genreController.dispose();
     _moodController.dispose();
     _lyricsController.dispose();
@@ -57,18 +70,14 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
 
   Future<void> _pickAudio() async {
     final picked = await pickAudio();
-    if (!mounted) return;
-    if (picked != null) {
-      setState(() => _selectedAudio = picked);
-    }
+    if (!mounted || picked == null) return;
+    setState(() => _selectedAudio = picked);
   }
 
   Future<void> _pickThumbnail() async {
     final picked = await pickImage();
-    if (!mounted) return;
-    if (picked != null) {
-      setState(() => _selectedThumbnail = picked);
-    }
+    if (!mounted || picked == null) return;
+    setState(() => _selectedThumbnail = picked);
   }
 
   Future<void> _pickReleaseDate() async {
@@ -89,12 +98,50 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
 
     setState(() {
       _selectedFeaturingArtists.add(artist);
+      _artistRoles[artist.id] = SongArtistRole.featured;
     });
   }
 
   void _removeFeaturingArtist(ArtistModel artist) {
     setState(() {
       _selectedFeaturingArtists.removeWhere((a) => a.id == artist.id);
+      _artistRoles.remove(artist.id);
+    });
+  }
+
+  void _setFeaturingRole(ArtistModel artist, SongArtistRole role) {
+    setState(() {
+      _artistRoles[artist.id] = role;
+    });
+  }
+
+  void _selectComposerArtist(ArtistModel artist) {
+    setState(() {
+      _selectedComposerArtist = artist;
+      _composerController.text = _artistLabel(artist);
+      _composerSearchController.clear();
+      _composerSearchQuery = '';
+    });
+  }
+
+  void _clearComposerArtist() {
+    setState(() {
+      _selectedComposerArtist = null;
+    });
+  }
+
+  void _selectProducerArtist(ArtistModel artist) {
+    setState(() {
+      _selectedProducerArtist = artist;
+      _producerController.text = _artistLabel(artist);
+      _producerSearchController.clear();
+      _producerSearchQuery = '';
+    });
+  }
+
+  void _clearProducerArtist() {
+    setState(() {
+      _selectedProducerArtist = null;
     });
   }
 
@@ -119,12 +166,26 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
       return;
     }
 
+    final composerName = _emptyToNull(_composerController.text);
+    if ((_selectedComposerArtist == null) && composerName == null) {
+      showSnackBar(context, 'Composer is required.');
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
-      final artistIds = <String>[
-        primaryArtist.id,
-        ..._selectedFeaturingArtists.map((artist) => artist.id),
+      final artistLinks = <SongArtistModel>[
+        SongArtistModel(
+          artistId: primaryArtist.id,
+          role: SongArtistRole.primary,
+        ),
+        ..._selectedFeaturingArtists.map(
+          (artist) => SongArtistModel(
+            artistId: artist.id,
+            role: _artistRoles[artist.id] ?? SongArtistRole.featured,
+          ),
+        ),
       ];
 
       await ref.read(songViewModelProvider.notifier).uploadSong(
@@ -132,12 +193,18 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
             selectedThumbnail: _selectedThumbnail!,
             songName: _songNameController.text.trim(),
             releaseDate: _releaseDate!,
-            composerName: _composerController.text.trim(),
+            composerId: _selectedComposerArtist?.id,
+            composerName: composerName,
+            producerId: _selectedProducerArtist?.id,
             producerName: _emptyToNull(_producerController.text),
             genre: _emptyToNull(_genreController.text),
             lyrics: _emptyToNull(_lyricsController.text),
             mood: _emptyToNull(_moodController.text),
-            artistIds: artistIds,
+            artistIds: artistLinks
+                .map((link) => link.artistId)
+                .whereType<String>()
+                .toList(growable: false),
+            artistLinks: artistLinks,
           );
 
       final state = ref.read(songViewModelProvider);
@@ -161,7 +228,9 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
   void _clearForm() {
     _songNameController.clear();
     _composerController.clear();
+    _composerSearchController.clear();
     _producerController.clear();
+    _producerSearchController.clear();
     _genreController.clear();
     _moodController.clear();
     _lyricsController.clear();
@@ -172,7 +241,12 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
       _selectedThumbnail = null;
       _releaseDate = null;
       _artistSearchQuery = '';
+      _composerSearchQuery = '';
+      _producerSearchQuery = '';
+      _selectedComposerArtist = null;
+      _selectedProducerArtist = null;
       _selectedFeaturingArtists.clear();
+      _artistRoles.clear();
     });
   }
 
@@ -180,6 +254,12 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
     if (value == null) return null;
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String _artistLabel(ArtistModel artist) {
+    return artist.displayName?.isNotEmpty == true
+        ? artist.displayName!
+        : artist.name;
   }
 
   @override
@@ -199,7 +279,7 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
                 icon: Icons.multitrack_audio_rounded,
                 title: 'Release a new track',
                 subtitle:
-                    'Upload audio, artwork and metadata. Primary artist is fixed to the studio target; additional artists can be attached as featuring/collaborators.',
+                    'Build a track with stronger credits, cleaner metadata and real catalog links for composer, producer and collaborators.',
               ),
               const SizedBox(height: 20),
               if (resolvedArtistId == null)
@@ -223,53 +303,111 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
                     ),
                   ),
                   data: (primaryArtist) {
-                    final artistsSearchAsync = ref.watch(
-                      getArtistsProvider(search: _artistSearchQuery),
-                    );
+                    final collaboratorsAsync =
+                        _artistSearchQuery.trim().length >= 2
+                            ? ref.watch(
+                                getArtistsProvider(
+                                  search: _artistSearchQuery.trim(),
+                                ),
+                              )
+                            : const AsyncValue<List<ArtistModel>>.data(
+                                <ArtistModel>[],
+                              );
+
+                    final composerResults =
+                        _composerSearchQuery.trim().length >= 2
+                            ? ref.watch(
+                                getArtistsProvider(
+                                  search: _composerSearchQuery.trim(),
+                                ),
+                              )
+                            : const AsyncValue<List<ArtistModel>>.data(
+                                <ArtistModel>[],
+                              );
+
+                    final producerResults =
+                        _producerSearchQuery.trim().length >= 2
+                            ? ref.watch(
+                                getArtistsProvider(
+                                  search: _producerSearchQuery.trim(),
+                                ),
+                              )
+                            : const AsyncValue<List<ArtistModel>>.data(
+                                <ArtistModel>[],
+                              );
+
+                    final totalArtists = 1 + _selectedFeaturingArtists.length;
+                    final linkedCredits = [
+                      _selectedComposerArtist,
+                      _selectedProducerArtist,
+                    ].whereType<ArtistModel>().length;
+                    final readyAssets = [
+                      _selectedAudio,
+                      _selectedThumbnail,
+                    ].where((value) => value != null).length;
 
                     return Form(
                       key: _formKey,
                       child: Column(
                         children: [
-                          StudioSectionCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const StudioSectionTitle('Media'),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: StudioMediaPickerCard(
-                                        label: 'Audio file',
-                                        value: _selectedAudio?.name,
-                                        icon: Icons.audio_file_rounded,
-                                        buttonText: 'Select audio',
-                                        onTap: _pickAudio,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: StudioMediaPickerCard(
-                                        label: 'Artwork',
-                                        value: _selectedThumbnail?.name,
-                                        icon: Icons.image_outlined,
-                                        buttonText: 'Select image',
-                                        onTap: _pickThumbnail,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                          StudioMetricsStrip(
+                            metrics: [
+                              StudioMetricData(
+                                label: 'Assets ready',
+                                value: '$readyAssets/2',
+                                icon: Icons.perm_media_rounded,
+                                accentColor: const Color(0xFF8B5CF6),
+                              ),
+                              StudioMetricData(
+                                label: 'Artists on track',
+                                value: '$totalArtists',
+                                icon: Icons.group_rounded,
+                                accentColor: Pallete.accentCyan,
+                              ),
+                              StudioMetricData(
+                                label: 'Linked credits',
+                                value: '$linkedCredits/2',
+                                icon: Icons.account_tree_rounded,
+                                accentColor: const Color(0xFFF97316),
+                              ),
+                              StudioMetricData(
+                                label: 'Release date',
+                                value: _releaseDate == null ? 'Missing' : 'Set',
+                                icon: Icons.event_available_rounded,
+                                accentColor: const Color(0xFF22C55E),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 18),
                           StudioSectionCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const StudioSectionTitle('Song metadata'),
-                                const SizedBox(height: 14),
+                                const StudioSectionTitle('Media & identity'),
+                                const SizedBox(height: 10),
+                                const StudioInfoCallout(
+                                  title: 'Core track payload',
+                                  body:
+                                      'Audio, artwork, title and release date are the hard requirements. Genre, mood and lyrics stay optional but help the catalog feel more complete.',
+                                ),
+                                const SizedBox(height: 16),
+                                _StudioAdaptivePair(
+                                  left: StudioMediaPickerCard(
+                                    label: 'Audio master',
+                                    value: _selectedAudio?.name,
+                                    icon: Icons.audio_file_rounded,
+                                    buttonText: 'Select audio',
+                                    onTap: _pickAudio,
+                                  ),
+                                  right: StudioMediaPickerCard(
+                                    label: 'Artwork',
+                                    value: _selectedThumbnail?.name,
+                                    icon: Icons.image_outlined,
+                                    buttonText: 'Select image',
+                                    onTap: _pickThumbnail,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
                                 StudioTextField(
                                   controller: _songNameController,
                                   label: 'Track title',
@@ -281,58 +419,25 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
                                           : null,
                                 ),
                                 const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: StudioTextField(
-                                        controller: _composerController,
-                                        label: 'Composer',
-                                        hint: 'Who composed the song?',
-                                        icon: Icons.edit_note_rounded,
-                                        validator: (value) => value == null ||
-                                                value.trim().isEmpty
-                                            ? 'Composer is required'
-                                            : null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: StudioTextField(
-                                        controller: _producerController,
-                                        label: 'Producer',
-                                        hint: 'Optional',
-                                        icon: Icons.tune_rounded,
-                                      ),
-                                    ),
-                                  ],
+                                _StudioAdaptivePair(
+                                  left: StudioDateField(
+                                    label: 'Release date',
+                                    value: _releaseDate,
+                                    onPick: _pickReleaseDate,
+                                  ),
+                                  right: StudioTextField(
+                                    controller: _genreController,
+                                    label: 'Genre',
+                                    hint: 'Pop, indie, techno...',
+                                    icon: Icons.graphic_eq_rounded,
+                                  ),
                                 ),
                                 const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: StudioTextField(
-                                        controller: _genreController,
-                                        label: 'Genre',
-                                        hint: 'Pop, indie, techno...',
-                                        icon: Icons.graphic_eq_rounded,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: StudioTextField(
-                                        controller: _moodController,
-                                        label: 'Mood',
-                                        hint: 'Dark, chill, energetic...',
-                                        icon: Icons.auto_awesome_rounded,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                StudioDateField(
-                                  label: 'Release date',
-                                  value: _releaseDate,
-                                  onPick: _pickReleaseDate,
+                                StudioTextField(
+                                  controller: _moodController,
+                                  label: 'Mood',
+                                  hint: 'Dark, chill, energetic...',
+                                  icon: Icons.auto_awesome_rounded,
                                 ),
                                 const SizedBox(height: 14),
                                 StudioTextField(
@@ -351,19 +456,98 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                const StudioSectionTitle('Composer & producer'),
+                                const SizedBox(height: 10),
+                                const StudioInfoCallout(
+                                  title: 'Stronger credit binding',
+                                  body:
+                                      'Each credit can stay as free text or be linked to a real artist record. When linked, the upload sends both the visible name and the backend id.',
+                                ),
+                                const SizedBox(height: 16),
+                                _StudioAdaptivePair(
+                                  left: StudioCreditSelectorCard(
+                                    title: 'Composer',
+                                    description:
+                                        'Required. Link the composer to an internal artist or keep it as an external name.',
+                                    nameController: _composerController,
+                                    searchController: _composerSearchController,
+                                    searchQuery: _composerSearchQuery,
+                                    linkedArtist: _selectedComposerArtist,
+                                    searchResults: composerResults,
+                                    onSearchChanged: (value) {
+                                      setState(
+                                        () => _composerSearchQuery = value,
+                                      );
+                                    },
+                                    onSelectArtist: _selectComposerArtist,
+                                    onClearLinkedArtist: _clearComposerArtist,
+                                    icon: Icons.edit_note_rounded,
+                                    nameLabel: 'Composer name',
+                                    nameHint: 'Who composed the song?',
+                                    searchLabel: 'Link composer to artist',
+                                    searchHint: 'Search catalog artist',
+                                    required: true,
+                                  ),
+                                  right: StudioCreditSelectorCard(
+                                    title: 'Producer',
+                                    description:
+                                        'Optional. Use it when the producer deserves a proper catalog-level credit.',
+                                    nameController: _producerController,
+                                    searchController: _producerSearchController,
+                                    searchQuery: _producerSearchQuery,
+                                    linkedArtist: _selectedProducerArtist,
+                                    searchResults: producerResults,
+                                    onSearchChanged: (value) {
+                                      setState(
+                                        () => _producerSearchQuery = value,
+                                      );
+                                    },
+                                    onSelectArtist: _selectProducerArtist,
+                                    onClearLinkedArtist: _clearProducerArtist,
+                                    icon: Icons.tune_rounded,
+                                    nameLabel: 'Producer name',
+                                    nameHint: 'Optional producer',
+                                    searchLabel: 'Link producer to artist',
+                                    searchHint: 'Search catalog artist',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          StudioSectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 const StudioSectionTitle('Artist credits'),
                                 const SizedBox(height: 10),
                                 StudioInfoCallout(
-                                  title: 'Primary artist',
+                                  title: 'Primary artist locked',
                                   body:
-                                      '${primaryArtist.displayName ?? primaryArtist.name} is locked as the primary artist for this studio upload. Additional artists below are attached as collaborators/featuring.',
+                                      '${_artistLabel(primaryArtist)} is always the primary artist for this studio upload. Add collaborators below and adjust their role when needed.',
                                 ),
                                 const SizedBox(height: 16),
-                                _SelectedArtistChip(
-                                  label:
-                                      primaryArtist.displayName ?? primaryArtist.name,
-                                  roleLabel: 'PRIMARY',
-                                  removable: false,
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _SelectedArtistChip(
+                                      label: _artistLabel(primaryArtist),
+                                      role: SongArtistRole.primary,
+                                    ),
+                                    ..._selectedFeaturingArtists.map(
+                                      (artist) => _SelectedArtistChip(
+                                        label: _artistLabel(artist),
+                                        role: _artistRoles[artist.id] ??
+                                            SongArtistRole.featured,
+                                        removable: true,
+                                        onRemove: () =>
+                                            _removeFeaturingArtist(artist),
+                                        onRoleChanged: (role) =>
+                                            _setFeaturingRole(artist, role),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 16),
                                 StudioTextField(
@@ -375,113 +559,111 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
                                     setState(() => _artistSearchQuery = value);
                                   },
                                 ),
-                                const SizedBox(height: 14),
-                                ..._selectedFeaturingArtists.map(
-                                  (artist) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: _SelectedArtistChip(
-                                      label:
-                                          artist.displayName ?? artist.name,
-                                      roleLabel: 'FEATURED',
-                                      removable: true,
-                                      onRemove: () =>
-                                          _removeFeaturingArtist(artist),
-                                    ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _artistSearchQuery.trim().length >= 2
+                                      ? 'Add collaborators from your catalog and decide how they appear on the release.'
+                                      : 'Type at least 2 characters to search artists.',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white38,
+                                    fontSize: 11,
                                   ),
                                 ),
-                                if (_selectedFeaturingArtists.isNotEmpty)
+                                if (_artistSearchQuery.trim().length >= 2) ...[
                                   const SizedBox(height: 10),
-                                artistsSearchAsync.when(
-                                  loading: () => const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 12),
-                                    child: Center(
-                                        child: CircularProgressIndicator()),
-                                  ),
-                                  error: (error, _) => Text(
-                                    error.toString(),
-                                    style:
-                                        const TextStyle(color: Colors.white70),
-                                  ),
-                                  data: (artists) {
-                                    final candidates = artists.where((artist) {
-                                      final isPrimary =
-                                          artist.id == primaryArtist.id;
-                                      final alreadySelected =
-                                          _selectedFeaturingArtists.any(
-                                              (a) => a.id == artist.id);
-                                      return !isPrimary && !alreadySelected;
-                                    }).toList();
+                                  collaboratorsAsync.when(
+                                    loading: () => const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    ),
+                                    error: (error, _) => Text(
+                                      error.toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    data: (artists) {
+                                      final candidates =
+                                          artists.where((artist) {
+                                        final isPrimary =
+                                            artist.id == primaryArtist.id;
+                                        final alreadySelected =
+                                            _selectedFeaturingArtists.any(
+                                          (a) => a.id == artist.id,
+                                        );
+                                        return !isPrimary && !alreadySelected;
+                                      }).toList(growable: false);
 
-                                    if (_artistSearchQuery.trim().isEmpty) {
-                                      return Text(
-                                        'Search for artists to add a featuring.',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          color: Colors.white54,
-                                          fontSize: 12.5,
-                                        ),
-                                      );
-                                    }
+                                      if (candidates.isEmpty) {
+                                        return Text(
+                                          'No artists found for "${_artistSearchQuery.trim()}".',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: Colors.white54,
+                                            fontSize: 12.5,
+                                          ),
+                                        );
+                                      }
 
-                                    if (candidates.isEmpty) {
-                                      return Text(
-                                        'No artists found for "${_artistSearchQuery.trim()}".',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          color: Colors.white54,
-                                          fontSize: 12.5,
-                                        ),
-                                      );
-                                    }
-
-                                    return Column(
-                                      children: candidates
-                                          .map(
-                                            (artist) => ListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              leading: CircleAvatar(
-                                                backgroundImage: artist.imageUrl !=
-                                                            null &&
-                                                        artist.imageUrl!.isNotEmpty
-                                                    ? NetworkImage(
-                                                        artist.imageUrl!)
-                                                    : null,
-                                                child: artist.imageUrl == null
-                                                    ? Text(
-                                                        (artist.displayName ??
-                                                                artist.name)
-                                                            .characters
-                                                            .first
-                                                            .toUpperCase(),
-                                                      )
-                                                    : null,
-                                              ),
-                                              title: Text(
-                                                artist.displayName ?? artist.name,
-                                                style: GoogleFonts.plusJakartaSans(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w600,
+                                      return Column(
+                                        children: candidates
+                                            .map(
+                                              (artist) => ListTile(
+                                                contentPadding: EdgeInsets.zero,
+                                                leading: CircleAvatar(
+                                                  backgroundImage:
+                                                      artist.imageUrl != null &&
+                                                              artist.imageUrl!
+                                                                  .isNotEmpty
+                                                          ? NetworkImage(
+                                                              artist.imageUrl!,
+                                                            )
+                                                          : null,
+                                                  child: artist.imageUrl ==
+                                                              null ||
+                                                          artist
+                                                              .imageUrl!.isEmpty
+                                                      ? Text(
+                                                          _artistLabel(artist)
+                                                              .characters
+                                                              .first
+                                                              .toUpperCase(),
+                                                        )
+                                                      : null,
+                                                ),
+                                                title: Text(
+                                                  _artistLabel(artist),
+                                                  style: GoogleFonts
+                                                      .plusJakartaSans(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                subtitle: artist.slug == null
+                                                    ? null
+                                                    : Text(
+                                                        '@${artist.slug}',
+                                                        style: GoogleFonts
+                                                            .plusJakartaSans(
+                                                          color: Colors.white54,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                trailing: OutlinedButton(
+                                                  onPressed: () =>
+                                                      _addFeaturingArtist(
+                                                          artist),
+                                                  child: const Text('Add'),
                                                 ),
                                               ),
-                                              subtitle: artist.slug == null
-                                                  ? null
-                                                  : Text(
-                                                      '@${artist.slug}',
-                                                      style:
-                                                          GoogleFonts.plusJakartaSans(
-                                                        color: Colors.white54,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                              trailing: OutlinedButton(
-                                                onPressed: () =>
-                                                    _addFeaturingArtist(artist),
-                                                child: const Text('Add'),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                    );
-                                  },
-                                ),
+                                            )
+                                            .toList(growable: false),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -492,10 +674,22 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
                               children: [
                                 const StudioSectionTitle('Publish'),
                                 const SizedBox(height: 10),
-                                const StudioInfoCallout(
-                                  title: 'Featuring model',
-                                  body:
-                                      'This studio UI mirrors the admin upload flow. Primary artist is sent first, featuring artists follow in the payload order. If you want explicit role persistence, the upload API should also accept artist roles.',
+                                Text(
+                                  'Ready to push this release into the catalog?',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'The upload will keep ${totalArtists == 1 ? '1 credited artist' : '$totalArtists credited artists'}, ${linkedCredits == 0 ? 'manual-only credits' : '$linkedCredits linked credit${linkedCredits == 1 ? '' : 's'}'} and all the metadata you set above.',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white70,
+                                    fontSize: 12.5,
+                                    height: 1.45,
+                                  ),
                                 ),
                                 const SizedBox(height: 18),
                                 StudioPrimaryButton(
@@ -520,17 +714,55 @@ class _StudioSongTabState extends ConsumerState<StudioSongTab> {
   }
 }
 
+class _StudioAdaptivePair extends StatelessWidget {
+  final Widget left;
+  final Widget right;
+
+  const _StudioAdaptivePair({
+    required this.left,
+    required this.right,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 720) {
+          return Column(
+            children: [
+              left,
+              const SizedBox(height: 12),
+              right,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: left),
+            const SizedBox(width: 12),
+            Expanded(child: right),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _SelectedArtistChip extends StatelessWidget {
   final String label;
-  final String roleLabel;
+  final SongArtistRole role;
   final bool removable;
   final VoidCallback? onRemove;
+  final ValueChanged<SongArtistRole>? onRoleChanged;
 
   const _SelectedArtistChip({
     required this.label,
-    required this.roleLabel,
-    required this.removable,
+    required this.role,
+    this.removable = false,
     this.onRemove,
+    this.onRoleChanged,
   });
 
   @override
@@ -543,37 +775,110 @@ class _SelectedArtistChip extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              color: Colors.white.withOpacity(0.08),
-            ),
-            child: Text(
-              roleLabel,
-              style: GoogleFonts.plusJakartaSans(
-                color: Colors.white70,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+          const SizedBox(width: 8),
+          if (onRoleChanged == null)
+            _RolePill(label: _roleLabel(role))
+          else
+            PopupMenuButton<SongArtistRole>(
+              color: const Color(0xFF12121A),
+              initialValue: role,
+              tooltip: 'Change artist role',
+              onSelected: onRoleChanged,
+              itemBuilder: (context) {
+                return const [
+                  SongArtistRole.featured,
+                  SongArtistRole.producer,
+                  SongArtistRole.mixer,
+                  SongArtistRole.writer,
+                ]
+                    .map(
+                      (value) => PopupMenuItem<SongArtistRole>(
+                        value: value,
+                        child: Text(
+                          _roleLabel(value),
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false);
+              },
+              child: _RolePill(
+                label: _roleLabel(role),
+                trailing: const Icon(
+                  Icons.unfold_more_rounded,
+                  size: 14,
+                  color: Colors.white70,
+                ),
               ),
             ),
-          ),
           if (removable) ...[
             const SizedBox(width: 8),
             IconButton(
               onPressed: onRemove,
               icon: const Icon(Icons.close_rounded, color: Colors.white70),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _roleLabel(SongArtistRole role) {
+    switch (role) {
+      case SongArtistRole.primary:
+        return 'PRIMARY';
+      case SongArtistRole.featured:
+        return 'FEATURED';
+      case SongArtistRole.producer:
+        return 'PRODUCER';
+      case SongArtistRole.mixer:
+        return 'MIXER';
+      case SongArtistRole.writer:
+        return 'WRITER';
+    }
+  }
+}
+
+class _RolePill extends StatelessWidget {
+  final String label;
+  final Widget? trailing;
+
+  const _RolePill({
+    required this.label,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Pallete.accentCyan.withOpacity(0.12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 4),
+            trailing!,
           ],
         ],
       ),

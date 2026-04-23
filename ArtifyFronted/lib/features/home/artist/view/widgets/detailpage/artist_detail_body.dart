@@ -1,4 +1,5 @@
 import 'package:client/features/home/artist/model/artist_model.dart';
+import 'package:client/features/home/album/view/pages/album_detail_page.dart';
 import 'package:client/features/home/artist/view/widgets/detailpage/artist_actions_row.dart';
 import 'package:client/features/home/artist/view/widgets/detailpage/artist_song_playback.dart';
 import 'package:client/features/home/artist/view/widgets/detailpage/cosmic_header.dart';
@@ -205,46 +206,80 @@ class ArtistAlbumRefCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 160,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: albumRef.coverUrl != null
-                ? Image.network(
-                    albumRef.coverUrl!,
-                    width: 160,
-                    height: 160,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    width: 160,
-                    height: 160,
-                    color: Colors.white.withOpacity(0.06),
-                    child: const Icon(
-                      Icons.album_outlined,
-                      color: Colors.white38,
-                      size: 48,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AlbumDetailPage(albumId: albumRef.albumId),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                children: [
+                  albumRef.coverUrl != null
+                      ? Image.network(
+                          albumRef.coverUrl!,
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          width: 160,
+                          height: 160,
+                          color: Colors.white.withOpacity(0.06),
+                          child: const Icon(
+                            Icons.album_outlined,
+                            color: Colors.white38,
+                            size: 48,
+                          ),
+                        ),
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withOpacity(0.45),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.10),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            albumRef.title ?? 'Unknown album',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+                ],
+              ),
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (albumRef.role != null)
+            const SizedBox(height: 8),
             Text(
-              albumRef.role!,
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              albumRef.title ?? 'Unknown album',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-        ],
+            if (albumRef.role != null)
+              Text(
+                albumRef.role!,
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+          ],
+        ),
       ),
     );
   }

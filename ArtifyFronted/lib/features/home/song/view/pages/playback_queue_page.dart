@@ -55,9 +55,10 @@ class PlaybackQueuePage extends ConsumerWidget {
 
     final currentItem = queueState.currentItem;
     final currentIndex = queueState.currentIndex ?? 0;
-    final previousItems =
-        currentIndex > 0 ? queueState.items.sublist(0, currentIndex) : const [];
+    final previousItems = queueState.previousItems;
     final upcomingItems = queueState.upcomingItems;
+    final queuedCount = queueState.queuedCount;
+    final historyCount = queueState.historyCount;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -75,7 +76,8 @@ class PlaybackQueuePage extends ConsumerWidget {
                       slivers: [
                         SliverToBoxAdapter(
                           child: _QueueHeader(
-                            totalItems: queueState.totalItems,
+                            queuedCount: queuedCount,
+                            historyCount: historyCount,
                             onBack: () => Navigator.of(context).pop(),
                             onClear: () async {
                               await queueController.clearQueue();
@@ -88,8 +90,8 @@ class PlaybackQueuePage extends ConsumerWidget {
                         const SliverToBoxAdapter(child: SizedBox(height: 18)),
                         SliverToBoxAdapter(
                           child: _QueueOverviewStrip(
-                            totalItems: queueState.totalItems,
-                            upcomingCount: upcomingItems.length,
+                            queuedCount: queuedCount,
+                            historyCount: historyCount,
                             repeatLabel: _repeatLabel(queueState.repeatMode),
                           ),
                         ),
@@ -122,9 +124,9 @@ class PlaybackQueuePage extends ConsumerWidget {
                             icon: Icons.upcoming_rounded,
                             eyebrow: 'NEXT',
                             title: 'Up next',
-                            subtitle: upcomingItems.isEmpty
+                            subtitle: queuedCount == 0
                                 ? 'There are no tracks waiting after the current one.'
-                                : '${upcomingItems.length} track${upcomingItems.length == 1 ? '' : 's'} lined up after the current song.',
+                                : '$queuedCount track${queuedCount == 1 ? '' : 's'} lined up after the current song.',
                             child: upcomingItems.isEmpty
                                 ? const _InlineMessage(
                                     icon: Icons.queue_music_rounded,
@@ -148,7 +150,7 @@ class PlaybackQueuePage extends ConsumerWidget {
                                           ),
                                           child: _UpcomingQueueCard(
                                             item: item,
-                                            queuePosition: absoluteIndex + 1,
+                                            queuePosition: entry.key + 1,
                                             isFirstUp: entry.key == 0,
                                             artistName: _artistName(item),
                                             sourceLabel: _sourceLabel(item),
@@ -187,7 +189,7 @@ class PlaybackQueuePage extends ConsumerWidget {
                             child: _QueueSectionCard(
                               icon: Icons.history_rounded,
                               eyebrow: 'BEFORE',
-                              title: 'Played earlier',
+                              title: 'Played in this session',
                               subtitle:
                                   '${previousItems.length} track${previousItems.length == 1 ? '' : 's'} came before the current one in this session.',
                               child: Column(
@@ -228,15 +230,33 @@ class PlaybackQueuePage extends ConsumerWidget {
 }
 
 class _QueueHeader extends StatelessWidget {
-  final int totalItems;
+  final int queuedCount;
+  final int historyCount;
   final VoidCallback onBack;
   final VoidCallback onClear;
 
   const _QueueHeader({
-    required this.totalItems,
+    required this.queuedCount,
+    required this.historyCount,
     required this.onBack,
     required this.onClear,
   });
+
+  String get _subtitle {
+    if (queuedCount <= 0 && historyCount <= 0) {
+      return 'No tracks are queued after the current song';
+    }
+
+    if (queuedCount <= 0) {
+      return '$historyCount played already in this session';
+    }
+
+    if (historyCount <= 0) {
+      return '$queuedCount track${queuedCount == 1 ? '' : 's'} queued after the current song';
+    }
+
+    return '$queuedCount queued • $historyCount played earlier';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +281,7 @@ class _QueueHeader extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '$totalItems track${totalItems == 1 ? '' : 's'} in the active session',
+                _subtitle,
                 style: const TextStyle(
                   color: Colors.white60,
                   fontSize: 12,
@@ -281,13 +301,13 @@ class _QueueHeader extends StatelessWidget {
 }
 
 class _QueueOverviewStrip extends StatelessWidget {
-  final int totalItems;
-  final int upcomingCount;
+  final int queuedCount;
+  final int historyCount;
   final String repeatLabel;
 
   const _QueueOverviewStrip({
-    required this.totalItems,
-    required this.upcomingCount,
+    required this.queuedCount,
+    required this.historyCount,
     required this.repeatLabel,
   });
 
@@ -320,16 +340,16 @@ class _QueueOverviewStrip extends StatelessWidget {
         children: [
           Expanded(
             child: _StatPill(
-              label: 'Total',
-              value: '$totalItems',
+              label: 'Queued',
+              value: '$queuedCount',
               accent: const Color(0xFF58E1FF),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _StatPill(
-              label: 'Up next',
-              value: '$upcomingCount',
+              label: 'Played',
+              value: '$historyCount',
               accent: const Color(0xFFFE7A6B),
             ),
           ),

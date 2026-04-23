@@ -140,6 +140,18 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
     }
 
     final artistIds = _selectedArtists.map((a) => a.id).toList();
+    final artistLinks = _selectedArtists
+        .map(
+          (artist) => SongArtistModel(
+            artistId: artist.id,
+            role: _artistRoles[artist.id] ??
+                (_selectedArtists.isNotEmpty &&
+                        _selectedArtists.first.id == artist.id
+                    ? SongArtistRole.primary
+                    : SongArtistRole.featured),
+          ),
+        )
+        .toList(growable: false);
 
     await ref.read(songViewModelProvider.notifier).uploadSong(
           selectedAudio: selectedAudio!,
@@ -152,6 +164,7 @@ class _UploadSongPageState extends ConsumerState<UploadSongPage> {
           lyrics: lyrics.isEmpty ? null : lyrics,
           mood: mood.isEmpty ? null : mood,
           artistIds: artistIds,
+          artistLinks: artistLinks,
         );
   }
 

@@ -1,5 +1,7 @@
 import 'package:client/core/theme/app_pallete.dart';
+import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class StudioHeroCard extends StatelessWidget {
@@ -114,6 +116,420 @@ class StudioSectionTitle extends StatelessWidget {
         fontWeight: FontWeight.w700,
       ),
     );
+  }
+}
+
+class StudioMetricData {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color accentColor;
+
+  const StudioMetricData({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.accentColor,
+  });
+}
+
+class StudioMetricsStrip extends StatelessWidget {
+  final List<StudioMetricData> metrics;
+
+  const StudioMetricsStrip({
+    super.key,
+    required this.metrics,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 900
+            ? 4
+            : constraints.maxWidth >= 620
+                ? 2
+                : 1;
+        final spacing = 12.0;
+        final itemWidth = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: metrics
+              .map(
+                (metric) => SizedBox(
+                  width: itemWidth,
+                  child: _StudioMetricTile(metric: metric),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
+class _StudioMetricTile extends StatelessWidget {
+  final StudioMetricData metric;
+
+  const _StudioMetricTile({
+    required this.metric,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.035),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: metric.accentColor.withOpacity(0.14),
+              border: Border.all(
+                color: metric.accentColor.withOpacity(0.22),
+              ),
+            ),
+            child: Icon(
+              metric.icon,
+              color: metric.accentColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  metric.value,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  metric.label,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white54,
+                    fontSize: 11.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StudioCreditSelectorCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final TextEditingController nameController;
+  final TextEditingController searchController;
+  final String searchQuery;
+  final ArtistModel? linkedArtist;
+  final AsyncValue<List<ArtistModel>> searchResults;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<ArtistModel> onSelectArtist;
+  final VoidCallback onClearLinkedArtist;
+  final IconData icon;
+  final String nameLabel;
+  final String nameHint;
+  final String searchLabel;
+  final String searchHint;
+  final bool required;
+
+  const StudioCreditSelectorCard({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.nameController,
+    required this.searchController,
+    required this.searchQuery,
+    required this.linkedArtist,
+    required this.searchResults,
+    required this.onSearchChanged,
+    required this.onSelectArtist,
+    required this.onClearLinkedArtist,
+    required this.icon,
+    required this.nameLabel,
+    required this.nameHint,
+    required this.searchLabel,
+    required this.searchHint,
+    this.required = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmedQuery = searchQuery.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.03),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.06),
+                ),
+                child: Icon(icon, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white54,
+                        fontSize: 11.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: linkedArtist == null
+                      ? Colors.white.withOpacity(0.06)
+                      : Pallete.accentCyan.withOpacity(0.16),
+                ),
+                child: Text(
+                  linkedArtist == null
+                      ? (required ? 'REQUIRED' : 'MANUAL')
+                      : 'LINKED',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          StudioTextField(
+            controller: nameController,
+            label: nameLabel,
+            hint: nameHint,
+            icon: icon,
+          ),
+          if (linkedArtist != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Pallete.accentCyan.withOpacity(0.08),
+                border: Border.all(
+                  color: Pallete.accentCyan.withOpacity(0.14),
+                ),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundImage: linkedArtist!.imageUrl != null &&
+                            linkedArtist!.imageUrl!.isNotEmpty
+                        ? NetworkImage(linkedArtist!.imageUrl!)
+                        : null,
+                    child: linkedArtist!.imageUrl == null ||
+                            linkedArtist!.imageUrl!.isEmpty
+                        ? Text(
+                            _artistLabel(linkedArtist!)
+                                .characters
+                                .first
+                                .toUpperCase(),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _artistLabel(linkedArtist!),
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Linked to catalog artist id',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onClearLinkedArtist,
+                    icon: const Icon(
+                      Icons.link_off_rounded,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          StudioTextField(
+            controller: searchController,
+            label: searchLabel,
+            hint: searchHint,
+            icon: Icons.person_search_rounded,
+            onChanged: onSearchChanged,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            trimmedQuery.length >= 2
+                ? 'Search in your catalog to bind this credit to a real artist.'
+                : 'Type at least 2 characters to search artists.',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white38,
+              fontSize: 11,
+            ),
+          ),
+          if (trimmedQuery.length >= 2) ...[
+            const SizedBox(height: 10),
+            searchResults.when(
+              data: (artists) {
+                final filtered = artists
+                    .where((artist) => artist.id != linkedArtist?.id)
+                    .take(5)
+                    .toList(growable: false);
+
+                if (filtered.isEmpty) {
+                  return Text(
+                    'No artists found for "$trimmedQuery".',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white38,
+                      fontSize: 11,
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: filtered
+                      .map(
+                        (artist) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundImage: artist.imageUrl != null &&
+                                    artist.imageUrl!.isNotEmpty
+                                ? NetworkImage(artist.imageUrl!)
+                                : null,
+                            child: artist.imageUrl == null ||
+                                    artist.imageUrl!.isEmpty
+                                ? Text(
+                                    _artistLabel(artist)
+                                        .characters
+                                        .first
+                                        .toUpperCase(),
+                                  )
+                                : null,
+                          ),
+                          title: Text(
+                            _artistLabel(artist),
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: artist.slug == null
+                              ? null
+                              : Text(
+                                  '@${artist.slug}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white54,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                          trailing: OutlinedButton(
+                            onPressed: () => onSelectArtist(artist),
+                            child: const Text('Link'),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+              error: (error, _) => Text(
+                error.toString(),
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.redAccent,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _artistLabel(ArtistModel artist) {
+    return artist.displayName?.isNotEmpty == true
+        ? artist.displayName!
+        : artist.name;
   }
 }
 

@@ -93,7 +93,8 @@ class PlaybackQueueItem {
       song: SongModel.fromJson(songMap),
       sourceType: PlaybackSourceType.fromString(map['source_type']?.toString()),
       sourceId: map['source_id']?.toString(),
-      addedAt: DateTime.tryParse(map['added_at']?.toString() ?? '') ?? DateTime.now(),
+      addedAt: DateTime.tryParse(map['added_at']?.toString() ?? '') ??
+          DateTime.now(),
       isManuallyQueued: map['is_manually_queued'] == true,
     );
   }
@@ -125,6 +126,12 @@ class PlaybackQueueState {
 
   SongModel? get currentSong => currentItem?.song;
 
+  List<PlaybackQueueItem> get previousItems {
+    final index = currentIndex;
+    if (index == null || index <= 0 || index > items.length) return const [];
+    return items.sublist(0, index);
+  }
+
   List<PlaybackQueueItem> get upcomingItems {
     final index = currentIndex;
     if (index == null || index + 1 >= items.length) return const [];
@@ -136,6 +143,12 @@ class PlaybackQueueState {
   bool get hasCurrent => currentItem != null;
 
   int get totalItems => items.length;
+
+  int get historyCount => previousItems.length;
+
+  int get queuedCount => upcomingItems.length;
+
+  bool get hasQueuedItems => queuedCount > 0;
 
   PlaybackQueueState copyWith({
     List<PlaybackQueueItem>? items,
@@ -173,13 +186,13 @@ class PlaybackQueueState {
         : const <PlaybackQueueItem>[];
 
     final rawIndex = map['current_index'];
-    final parsedIndex = rawIndex is int
-        ? rawIndex
-        : int.tryParse(rawIndex?.toString() ?? '');
+    final parsedIndex =
+        rawIndex is int ? rawIndex : int.tryParse(rawIndex?.toString() ?? '');
 
-    final safeIndex = parsedIndex != null && parsedIndex >= 0 && parsedIndex < items.length
-        ? parsedIndex
-        : (items.isNotEmpty ? 0 : null);
+    final safeIndex =
+        parsedIndex != null && parsedIndex >= 0 && parsedIndex < items.length
+            ? parsedIndex
+            : (items.isNotEmpty ? 0 : null);
 
     return PlaybackQueueState(
       items: items,

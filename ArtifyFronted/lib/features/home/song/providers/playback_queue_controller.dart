@@ -44,6 +44,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
       if (ref.read(currentSongNotifierProvider) == null &&
           restored.currentSong != null) {
+        await _player.applyRepeatMode(restored.repeatMode);
         await _player.updateSong(
           restored.currentSong!,
           syncQueue: false,
@@ -51,7 +52,8 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
         );
       }
     } catch (error, stackTrace) {
-      debugPrint('[PlaybackQueueController] restore error: $error\n$stackTrace');
+      debugPrint(
+          '[PlaybackQueueController] restore error: $error\n$stackTrace');
       state = const PlaybackQueueState(isRestoring: false);
     } finally {
       _isRestoring = false;
@@ -64,6 +66,18 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       return;
     }
     await _localRepository.saveState(state);
+  }
+
+  Future<void> _refreshPlayerQueueIfNeeded({
+    bool? autoplay,
+    bool preservePosition = true,
+  }) async {
+    if (!state.hasCurrent) return;
+
+    await _player.refreshQueueSource(
+      autoplay: autoplay,
+      preservePosition: preservePosition,
+    );
   }
 
   Future<void> _replaceQueueAndPlay({
@@ -208,6 +222,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
     state = state.copyWith(items: updated);
     await _persistState();
+    await _refreshPlayerQueueIfNeeded();
   }
 
   Future<void> addToQueue(
@@ -236,6 +251,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
     state = state.copyWith(items: updated);
     await _persistState();
+    await _refreshPlayerQueueIfNeeded();
   }
 
   int? _nextIndex({required bool fromCompletion}) {
@@ -368,12 +384,18 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
         currentIndex: currentIndex - 1,
       );
       await _persistState();
+      await _refreshPlayerQueueIfNeeded(
+        autoplay: wasPlaying,
+      );
       return;
     }
 
     if (index > currentIndex) {
       state = state.copyWith(items: updated);
       await _persistState();
+      await _refreshPlayerQueueIfNeeded(
+        autoplay: wasPlaying,
+      );
       return;
     }
 
@@ -421,6 +443,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       currentIndex: currentIndex,
     );
     await _persistState();
+    await _refreshPlayerQueueIfNeeded();
   }
 
   Future<void> clearQueue({bool stopPlayback = true}) async {
@@ -444,7 +467,22 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
     };
 
     state = state.copyWith(repeatMode: nextMode);
+    unawaited(_player.applyRepeatMode(nextMode));
     unawaited(_persistState());
     return nextMode;
+  }
+
+  void syncPlayerIndex(int index) {
+    if (index < 0 ||
+        index >= state.items.length ||
+        state.currentIndex == index) {
+      return;
+    }
+
+    state = state.copyWith(
+      currentIndex: index,
+      isRestoring: false,
+    );
+    unawaited(_persistState());
   }
 }

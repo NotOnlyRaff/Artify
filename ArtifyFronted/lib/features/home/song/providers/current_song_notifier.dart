@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/providers/playback_queue_controller.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
@@ -16,6 +17,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
 
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<PlayerException>? _playerErrorSub;
+  StreamSubscription<int?>? _currentIndexSub;
 
   bool isPlaying = false;
   bool _listenersAttached = false;
@@ -41,6 +43,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       debugPrint('[CurrentSongNotifier] onDispose - dispose player');
       await _playerStateSub?.cancel();
       await _playerErrorSub?.cancel();
+      await _currentIndexSub?.cancel();
       await _audioPlayer.dispose();
     });
 
@@ -48,6 +51,10 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
   }
 
   void _attachPlayerListeners() {
+    _currentIndexSub ??= _audioPlayer.currentIndexStream.listen(
+      _handlePlayerQueueIndexChanged,
+    );
+
     _playerStateSub ??= _audioPlayer.playerStateStream.listen((playerState) {
       final processing = playerState.processingState;
       final playing = playerState.playing;
@@ -76,6 +83,78 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
         'code=${error.code}, message=${error.message}, index=${error.index}',
       );
     });
+  }
+
+  MediaItem _buildMediaItem(SongModel song) {
+    final artistName = song.artists.isNotEmpty
+        ? (song.artists.first.artistName ?? 'Unknown artist')
+        : 'Unknown artist';
+
+    return MediaItem(
+      id: song.id,
+      title: song.songName,
+      artist: artistName,
+      artUri: song.thumbnailUrl != null ? Uri.parse(song.thumbnailUrl!) : null,
+      duration: song.durationSeconds != null
+          ? Duration(seconds: song.durationSeconds!)
+          : null,
+    );
+  }
+
+  AudioSource _buildSongSource(SongModel song) {
+    return AudioSource.uri(
+      Uri.parse(song.songUrl),
+      tag: _buildMediaItem(song),
+    );
+  }
+
+  AudioSource _buildQueueSource(List<SongModel> songs) {
+    if (songs.length == 1) {
+      return _buildSongSource(songs.first);
+    }
+
+    return ConcatenatingAudioSource(
+      children: songs.map(_buildSongSource).toList(growable: false),
+    );
+  }
+
+  LoopMode _loopModeFor(PlaybackRepeatMode mode) {
+    return switch (mode) {
+      PlaybackRepeatMode.off => LoopMode.off,
+      PlaybackRepeatMode.all => LoopMode.all,
+      PlaybackRepeatMode.one => LoopMode.one,
+    };
+  }
+
+  Future<void> applyRepeatMode(PlaybackRepeatMode mode) async {
+    await _audioPlayer.setLoopMode(_loopModeFor(mode));
+  }
+
+  void _handlePlayerQueueIndexChanged(int? index) {
+    if (index == null) return;
+
+    final queueState = ref.read(playbackQueueControllerProvider);
+    if (queueState.items.isEmpty ||
+        index < 0 ||
+        index >= queueState.items.length) {
+      return;
+    }
+
+    final queueSong = queueState.items[index].song;
+
+    if (queueState.currentIndex != index) {
+      ref.read(playbackQueueControllerProvider.notifier).syncPlayerIndex(index);
+    }
+
+    unawaited(_songLocalRepository.saveRecentlyPlayed(queueSong));
+
+    final current = state;
+    if (current == null || current.id != queueSong.id) {
+      state = queueSong.copyWith();
+      return;
+    }
+
+    state = current.copyWith();
   }
 
   bool _isStaleRequest(int requestId) => requestId != _playRequestId;
@@ -130,32 +209,28 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     isPlaying = false;
 
     try {
+      final queueState = ref.read(playbackQueueControllerProvider);
+      final queueSongs =
+          queueState.items.map((item) => item.song).toList(growable: false);
+      final queueIndex = queueState.currentIndex ?? 0;
+      final useQueueSource = queueSongs.isNotEmpty &&
+          queueIndex >= 0 &&
+          queueIndex < queueSongs.length &&
+          queueSongs[queueIndex].id == song.id;
+      final playbackSongs = useQueueSource ? queueSongs : <SongModel>[song];
+      final initialIndex = useQueueSource ? queueIndex : 0;
+
       await _audioPlayer.stop();
       if (_isStaleRequest(requestId)) return;
 
-      final artistName = song.artists.isNotEmpty
-          ? (song.artists.first.artistName ?? 'Unknown artist')
-          : 'Unknown artist';
-
-      final mediaItem = MediaItem(
-        id: song.id,
-        title: song.songName,
-        artist: artistName,
-        artUri:
-            song.thumbnailUrl != null ? Uri.parse(song.thumbnailUrl!) : null,
-        duration: song.durationSeconds != null
-            ? Duration(seconds: song.durationSeconds!)
-            : null,
-      );
-
-      final audioSource = AudioSource.uri(
-        Uri.parse(song.songUrl),
-        tag: mediaItem,
-      );
-
       if (_isStaleRequest(requestId)) return;
+      await applyRepeatMode(queueState.repeatMode);
       debugPrint('[CurrentSongNotifier] setAudioSource -> ${song.songUrl}');
-      await _audioPlayer.setAudioSource(audioSource);
+      await _audioPlayer.setAudioSource(
+        _buildQueueSource(playbackSongs),
+        initialIndex: initialIndex,
+        initialPosition: Duration.zero,
+      );
       debugPrint('[CurrentSongNotifier] setAudioSource DONE');
       if (_isStaleRequest(requestId)) return;
 
@@ -196,6 +271,52 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       if (current != null) {
         state = current.copyWith();
       }
+    }
+  }
+
+  Future<void> refreshQueueSource({
+    bool? autoplay,
+    bool preservePosition = true,
+  }) async {
+    final queueState = ref.read(playbackQueueControllerProvider);
+    final songs =
+        queueState.items.map((item) => item.song).toList(growable: false);
+    final currentIndex = queueState.currentIndex;
+
+    if (songs.isEmpty || currentIndex == null) return;
+
+    final requestId = ++_playRequestId;
+    final shouldAutoplay = autoplay ?? isPlaying;
+    final currentPosition =
+        preservePosition ? _audioPlayer.position : Duration.zero;
+
+    state = songs[currentIndex];
+
+    try {
+      await applyRepeatMode(queueState.repeatMode);
+      await _audioPlayer.setAudioSource(
+        _buildQueueSource(songs),
+        initialIndex: currentIndex,
+        initialPosition: currentPosition,
+      );
+      if (_isStaleRequest(requestId)) return;
+
+      if (shouldAutoplay) {
+        await _audioPlayer.play();
+        isPlaying = true;
+      } else {
+        await _audioPlayer.pause();
+        isPlaying = false;
+      }
+
+      if (_isStaleRequest(requestId)) return;
+      final current = state;
+      if (current != null) {
+        state = current.copyWith();
+      }
+    } catch (e, st) {
+      if (_isStaleRequest(requestId)) return;
+      debugPrint('[CurrentSongNotifier] ERROR in refreshQueueSource: $e\n$st');
     }
   }
 

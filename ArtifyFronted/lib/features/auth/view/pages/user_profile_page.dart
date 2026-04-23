@@ -59,9 +59,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
     ref.listen<AsyncValue>(authViewModelProvider, (previous, next) {
       next.whenOrNull(
-        error: (error, stackTrace) {
-          showSnackBar(context, error.toString());
-        },
+        error: (error, _) => showSnackBar(context, error.toString()),
         data: (data) {
           if (data == null && previous?.isLoading == true) {
             Navigator.pushAndRemoveUntil(
@@ -77,9 +75,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     });
 
     if (currentUser == null) {
-      return const Scaffold(
-        body: Center(child: Loader()),
-      );
+      return const Scaffold(body: Center(child: Loader()));
     }
 
     return Scaffold(
@@ -99,10 +95,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF050509),
-              Color(0xFF140813),
-            ],
+            colors: [Color(0xFF050509), Color(0xFF140813)],
           ),
         ),
         child: SafeArea(
@@ -134,11 +127,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                       newPasswordController: _newPasswordController,
                       passwordVisible: _passwordVisible,
                       isLoading: authState.isLoading,
-                      onToggleVisibility: () {
-                        setState(() {
-                          _passwordVisible = !_passwordVisible;
-                        });
-                      },
+                      onToggleVisibility: () => setState(
+                        () => _passwordVisible = !_passwordVisible,
+                      ),
                       onChangePassword: _changePassword,
                     ),
                     const SizedBox(height: 32),
@@ -162,6 +153,10 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     );
   }
 
+  // ------------------------------------------------------------------ //
+  //  Avatar                                                             //
+  // ------------------------------------------------------------------ //
+
   Future<void> _pickAndUploadImage() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
@@ -169,40 +164,31 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     );
 
     if (result == null || result.files.isEmpty) return;
-
     final pickedFile = result.files.single;
 
     if (pickedFile.bytes == null) {
-      showSnackBar(context, 'Unable to read selected image.');
+      if (mounted) showSnackBar(context, 'Unable to read selected image.');
       return;
     }
 
-    final res =
-        await ref.read(authViewModelProvider.notifier).uploadProfilePicture(
-              bytes: pickedFile.bytes!,
-              fileName: pickedFile.name,
-            );
+    // FIX: usa il nuovo metodo unificato uploadAndApplyProfilePicture.
+    // Il vecchio flusso era:
+    //   1. uploadProfilePicture → Either<AppFailure, String> (imageUrl)
+    //   2. updateProfilePicture(imageUrl) → seconda chiamata API
+    // Ora il backend /auth/upload-profile-picture restituisce UserOut
+    // direttamente, quindi un solo round-trip è sufficiente.
+    await ref.read(authViewModelProvider.notifier).uploadAndApplyProfilePicture(
+          bytes: pickedFile.bytes!,
+          fileName: pickedFile.name,
+        );
 
-    switch (res) {
-      case Left(value: final l):
-        showSnackBar(context, 'Image upload failed: ${l.message}');
-        break;
-
-      case Right(value: final imageUrl):
-        await ref
-            .read(authViewModelProvider.notifier)
-            .updateProfilePicture(imageUrl);
-
-        final state = ref.read(authViewModelProvider);
-
-        if (state.hasError) {
-          showSnackBar(context, state.error.toString());
-        } else {
-          showSnackBar(context, 'Profile picture updated!');
-        }
-        break;
-    }
+    // Il ref.listen in build() gestisce già success e error —
+    // non serve fare altro qui.
   }
+
+  // ------------------------------------------------------------------ //
+  //  Profilo                                                            //
+  // ------------------------------------------------------------------ //
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) {
@@ -213,12 +199,20 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     final newName = _nameController.text.trim();
     final currentUser = ref.read(currentUserNotifierProvider);
 
-    if (newName != currentUser?.name) {
-      ref.read(authViewModelProvider.notifier).updateUserName(newName);
-    } else {
+    if (newName == currentUser?.name) {
       showSnackBar(context, 'No changes detected to save.');
+      return;
     }
+
+    // FIX: aggiunto await e !mounted guard — senza await l'UI poteva
+    // mostrare il vecchio stato mentre l'aggiornamento era ancora in corso.
+    await ref.read(authViewModelProvider.notifier).updateUserName(newName);
+    if (!mounted) return;
   }
+
+  // ------------------------------------------------------------------ //
+  //  Logout / delete                                                    //
+  // ------------------------------------------------------------------ //
 
   Future<void> _logout(BuildContext context) async {
     await ref.read(authViewModelProvider.notifier).logout();
@@ -233,47 +227,41 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   Future<void> _confirmDeleteAccount() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF140813),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF140813),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete Account?',
+          style: GoogleFonts.plusJakartaSans(color: Colors.white),
+        ),
+        content: Text(
+          'This action cannot be undone. All your favorites and metadata will be permanently lost.',
+          style: GoogleFonts.plusJakartaSans(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child:
+                const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
-          title: Text(
-            'Delete Account?',
-            style: GoogleFonts.plusJakartaSans(color: Colors.white),
+          ElevatedButton(
+            style:
+                ElevatedButton.styleFrom(backgroundColor: Pallete.errorColor),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
-          content: Text(
-            'This action cannot be undone. All your favorites and metadata will be permanently lost.',
-            style: GoogleFonts.plusJakartaSans(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Pallete.errorColor,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text(
-                'Delete',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
 
     if (confirmed == true && mounted) {
       ref.read(authViewModelProvider.notifier).deleteUserAccount();
     }
   }
+
+  // ------------------------------------------------------------------ //
+  //  Password                                                           //
+  // ------------------------------------------------------------------ //
 
   Future<void> _changePassword() async {
     final currentUser = ref.read(currentUserNotifierProvider);
@@ -298,19 +286,19 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
     final res = await ref.read(authViewModelProvider.notifier).changePassword(
           userId: currentUser.id,
-          currentPassword: currentPassword,
+          currentPassword: currentPassword.isEmpty ? null : currentPassword,
           newPassword: newPassword,
         );
+
+    if (!mounted) return;
 
     switch (res) {
       case Left(value: final l):
         showSnackBar(context, l.message);
-        break;
       case Right():
         _currentPasswordController.clear();
         _newPasswordController.clear();
         showSnackBar(context, 'Password updated successfully!');
-        break;
     }
   }
 }

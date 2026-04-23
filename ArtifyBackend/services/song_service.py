@@ -1,113 +1,109 @@
-import uuid
 import cloudinary.uploader
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
+from models.enums import SongArtistRole, UserRole  # FIX: import da enums.py
 from models.song import Song
+from models.songArtist import SongArtist
+from models.albumSong import AlbumSong
 from models.favorite import Favorite
-from models.songArtist import SongArtist, SongArtistRole
 from models.artist import Artist
-from core.config import settings
-from models.user import User, UserRole
+from models.user import User
+from schemas.song_schema import SongCreate
 
 
 class SongService:
+
+    # ------------------------------------------------------------------ #
+    #  Upload                                                             #
+    # ------------------------------------------------------------------ #
 
     @staticmethod
     def upload_song(
         db: Session,
         song_file: UploadFile,
         thumbnail_file: UploadFile,
-        song_data: dict,
-        artist_ids: list[str],
-    ):
-        if not artist_ids:
+        song_data: SongCreate,          # FIX: SongCreate invece di dict grezzo
+    ) -> Song:
+        # FIX: validazione artist_links dallo schema, non da un artist_ids separato.
+        if not song_data.artist_links:
             raise HTTPException(
-                status_code=400,
-                detail="A song must have at least one artist"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A song must have at least one artist",
             )
 
-        artist_ids = list(dict.fromkeys(artist_ids))
-
+        # Deduplica e verifica esistenza artisti
+        artist_ids = list({link.artist_id for link in song_data.artist_links})
         artists = db.query(Artist).filter(Artist.id.in_(artist_ids)).all()
-        found_artist_ids = {artist.id for artist in artists}
-
-        missing_artist_ids = [
-            artist_id for artist_id in artist_ids
-            if artist_id not in found_artist_ids
-        ]
-        if missing_artist_ids:
+        found_ids = {a.id for a in artists}
+        missing = [aid for aid in artist_ids if aid not in found_ids]
+        if missing:
             raise HTTPException(
-                status_code=404,
-                detail=f"Artist(s) not found: {missing_artist_ids}"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Artist(s) not found: {missing}",
             )
 
-        song_id = str(uuid.uuid4())
+        song_public_id: str | None = None
+        thumb_public_id: str | None = None
 
         try:
-            # Upload audio
+            # Upload audio — Cloudinary già configurato globalmente in main.py
+            # FIX: usiamo un placeholder per il folder; l'ID reale lo otteniamo
+            # dopo il flush. Cloudinary accetta qualsiasi folder string.
             song_res = cloudinary.uploader.upload(
                 song_file.file,
                 resource_type="video",
-                folder=f"artify/songs/{song_id}",
-                cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-                api_key=settings.CLOUDINARY_API_KEY,
-                api_secret=settings.CLOUDINARY_API_SECRET,
-                secure=True,
+                folder="artify/songs",
             )
+            song_public_id = song_res.get("public_id")
+            song_url = song_res.get("secure_url")
+            if not song_url:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Cloudinary did not return a secure URL for the song file",
+                )
 
             # Upload thumbnail
             thumb_res = cloudinary.uploader.upload(
                 thumbnail_file.file,
                 resource_type="image",
-                folder=f"artify/thumbnails/{song_id}",
-                cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-                api_key=settings.CLOUDINARY_API_KEY,
-                api_secret=settings.CLOUDINARY_API_SECRET,
-                secure=True,
+                folder="artify/thumbnails",
             )
-
-            song_url = song_res.get("secure_url")
+            thumb_public_id = thumb_res.get("public_id")
             thumbnail_url = thumb_res.get("secure_url")
-
-            if not song_url:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Cloudinary did not return a secure URL for the song file."
-                )
-
             if not thumbnail_url:
                 raise HTTPException(
-                    status_code=500,
-                    detail="Cloudinary did not return a secure URL for the thumbnail."
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Cloudinary did not return a secure URL for the thumbnail",
                 )
 
+            # FIX: id non passato — generato dal default del model.
+            # FIX: composer_id e composer_name entrambi mappati dallo schema.
             new_song = Song(
-                id=song_id,
-                song_name=song_data["song_name"],
+                song_name=song_data.song_name,
                 song_url=song_url,
                 thumbnail_url=thumbnail_url,
-                release_date=song_data["release_date"],
-                composer_name=song_data["composer_name"],
-                producer_name=song_data.get("producer_name"),
-                genre=song_data.get("genre"),
-                lyrics=song_data.get("lyrics"),
-                mood=song_data.get("mood"),
+                release_date=song_data.release_date,
+                composer_id=song_data.composer_id,
+                composer_name=song_data.composer_name,
+                producer_id=song_data.producer_id,
+                producer_name=song_data.producer_name,
+                genre=song_data.genre,
+                lyrics=song_data.lyrics,
+                mood=song_data.mood,
+                duration_seconds=song_data.duration_seconds,
             )
-
             db.add(new_song)
-            db.flush()
+            db.flush()  # ottieni new_song.id prima di creare i link
 
-            for index, artist_id in enumerate(artist_ids):
-                role = SongArtistRole.PRIMARY if index == 0 else SongArtistRole.FEATURED
-
-                link = SongArtist(
-                    id=str(uuid.uuid4()),
-                    song_id=song_id,
-                    artist_id=artist_id,
-                    role=role,
-                )
-                db.add(link)
+            # FIX: ruoli presi esplicitamente da artist_links, non per posizione.
+            # FIX: id SongArtist non passato — generato dal default del model.
+            for link in song_data.artist_links:
+                db.add(SongArtist(
+                    song_id=new_song.id,
+                    artist_id=link.artist_id,
+                    role=link.role,
+                ))
 
             db.commit()
             db.refresh(new_song)
@@ -115,13 +111,36 @@ class SongService:
 
         except HTTPException:
             db.rollback()
+            # FIX: cleanup Cloudinary se il DB fallisce dopo l'upload.
+            if song_public_id:
+                try:
+                    cloudinary.uploader.destroy(song_public_id, resource_type="video")
+                except Exception:
+                    pass
+            if thumb_public_id:
+                try:
+                    cloudinary.uploader.destroy(thumb_public_id, resource_type="image")
+                except Exception:
+                    pass
             raise
+
         except Exception as e:
             db.rollback()
+            if song_public_id:
+                try:
+                    cloudinary.uploader.destroy(song_public_id, resource_type="video")
+                except Exception:
+                    pass
+            if thumb_public_id:
+                try:
+                    cloudinary.uploader.destroy(thumb_public_id, resource_type="image")
+                except Exception:
+                    pass
             raise HTTPException(
-                status_code=500,
-                detail=f"Failed to upload song: {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to upload song: {str(e)}",
             )
+
         finally:
             try:
                 song_file.file.close()
@@ -132,8 +151,19 @@ class SongService:
             except Exception:
                 pass
 
+    # ------------------------------------------------------------------ #
+    #  Preferiti                                                          #
+    # ------------------------------------------------------------------ #
+
     @staticmethod
-    def toggle_favorite(db: Session, user_id: str, song_id: str):
+    def toggle_favorite(db: Session, user_id: str, song_id: str) -> bool:
+        # FIX: verifica esistenza song prima di procedere.
+        if not db.query(Song).filter(Song.id == song_id).first():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Song not found",
+            )
+
         fav = db.query(Favorite).filter_by(user_id=user_id, song_id=song_id).first()
 
         if fav:
@@ -141,46 +171,65 @@ class SongService:
             db.commit()
             return False
 
-        new_fav = Favorite(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            song_id=song_id
-        )
-        db.add(new_fav)
+        # FIX: id non passato — generato dal default del model.
+        db.add(Favorite(user_id=user_id, song_id=song_id))
         db.commit()
         return True
 
-    @staticmethod
-    def get_all_songs(db: Session):
-        return db.query(Song).options(
-            joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
-            joinedload(Song.albums)
-        ).all()
+    # ------------------------------------------------------------------ #
+    #  Lettura                                                            #
+    # ------------------------------------------------------------------ #
 
     @staticmethod
-    def get_song_by_id(db: Session, song_id: str):
-        song = db.query(Song).options(
+    def get_all_songs(
+        db: Session,
+        limit: int = 20,        # FIX: paginazione — restituire tutto il DB in una query
+        offset: int = 0,        # è bloccante e insostenibile con dati in crescita.
+    ) -> dict:
+        # FIX: joinedload(Song.albums) rimosso — relazione eliminata dal model.
+        # Sostituito con album_song_links -> album.
+        base_query = db.query(Song).options(
             joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
-            joinedload(Song.albums)
-        ).filter(Song.id == song_id).first()
+            joinedload(Song.album_song_links).joinedload(AlbumSong.album),
+        )
+        total = base_query.count()
+        songs = base_query.offset(offset).limit(limit).all()
+        return {"items": songs, "total": total, "limit": limit, "offset": offset}
 
+    @staticmethod
+    def get_song_by_id(db: Session, song_id: str) -> Song:
+        # FIX: joinedload(Song.albums) rimosso — stesso motivo.
+        song = (
+            db.query(Song)
+            .options(
+                joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
+                joinedload(Song.album_song_links).joinedload(AlbumSong.album),
+            )
+            .filter(Song.id == song_id)
+            .first()
+        )
         if not song:
-            raise HTTPException(status_code=404, detail="Song not found")
-
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Song not found",
+            )
         return song
 
+    # ------------------------------------------------------------------ #
+    #  Eliminazione                                                       #
+    # ------------------------------------------------------------------ #
+
     @staticmethod
-    def delete_song(db, song_id: str, current_user: User) -> None:
+    def delete_song(db: Session, song_id: str, current_user: User) -> None:
         song = (
             db.query(Song)
             .options(joinedload(Song.song_artist_links))
             .filter(Song.id == song_id)
             .first()
         )
-
         if not song:
             raise HTTPException(
-                status_code=404,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Song not found",
             )
 
@@ -189,10 +238,9 @@ class SongService:
             link.artist_id == current_user.artist_id
             for link in song.song_artist_links
         )
-
         if not is_admin and not is_artist_owner:
             raise HTTPException(
-                status_code=403,
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to delete this song",
             )
 
@@ -202,6 +250,6 @@ class SongService:
         except Exception as e:
             db.rollback()
             raise HTTPException(
-                status_code=500,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Song deletion failed: {str(e)}",
             )

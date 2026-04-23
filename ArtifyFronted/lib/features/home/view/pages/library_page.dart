@@ -1,7 +1,8 @@
-import 'package:client/features/home/song/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/widgets/loader.dart';
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
+import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,11 +33,20 @@ class LibraryPage extends ConsumerWidget {
                 final song = data[index];
 
                 return ListTile(
-                  onTap: () {
-                    ref
-                        .read(currentSongNotifierProvider.notifier)
-                        .updateSong(song);
-                  },
+                  onTap: () => playSongsFromSource(
+                    ref: ref,
+                    songs: data,
+                    startIndex: index,
+                    sourceType: PlaybackSourceType.library,
+                  ),
+                  onLongPress: () => showSongPlaybackActionsSheet(
+                    context: context,
+                    ref: ref,
+                    song: song,
+                    contextSongs: data,
+                    startIndex: index,
+                    sourceType: PlaybackSourceType.library,
+                  ),
                   leading: CircleAvatar(
                     radius: 28,
                     backgroundColor: Pallete.backgroundColor,

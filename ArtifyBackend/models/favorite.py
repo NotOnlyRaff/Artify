@@ -1,27 +1,30 @@
-from sqlalchemy import TEXT, Column, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import relationship
-from models.base import Base
+import uuid
+
+from sqlalchemy import TEXT, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from models.base import Base, TimestampMixin
 
 
-class Favorite(Base):
+class Favorite(TimestampMixin, Base):
     __tablename__ = "favorites"
 
-    id = Column(TEXT, primary_key=True)
+    id: Mapped[str] = mapped_column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    song_id = Column(
+    song_id: Mapped[str] = mapped_column(
         TEXT,
         ForeignKey("songs.id", ondelete="CASCADE"),
-        nullable=False,
+        index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         TEXT,
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        index=True,
     )
 
     __table_args__ = (
         UniqueConstraint("user_id", "song_id", name="uq_user_song_favorite"),
     )
 
-    song = relationship("Song", back_populates="favorites")
-    user = relationship("User", back_populates="favorites")
+    song: Mapped["Song"] = relationship(back_populates="favorites")
+    user: Mapped["User"] = relationship(back_populates="favorites")

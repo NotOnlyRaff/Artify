@@ -1,25 +1,19 @@
-# pydantic_schemas/album_song.py
-
 from typing import Optional
-
-from pydantic import BaseModel, ConfigDict
-
-from schemas.album_schema import SongRef   # id, song_name, thumbnail_url
-from schemas.song_schema import AlbumRef   # id, title, cover_url
-
+from pydantic import BaseModel, ConfigDict, Field
+from schemas.refs import AlbumRef, SongRef
 
 class AlbumSongBase(BaseModel):
     """
-    Base comune per la relazione album–song.
+    Base comune per la relazione album-song.
     """
-    album_id: str
-    song_id: str
-    track_number: Optional[int] = None
+    album_id: str = Field(min_length=1)
+    song_id: str = Field(min_length=1)
+    track_number: Optional[int] = Field(default=None, ge=1)
 
 
 class AlbumSongCreate(AlbumSongBase):
     """
-    Payload per aggiungere una song a un album (con track_number opzionale).
+    Payload per collegare una song a un album.
     """
     pass
 
@@ -28,19 +22,19 @@ class AlbumSongUpdate(BaseModel):
     """
     Aggiorna solo la posizione del brano nell'album.
     """
-    track_number: Optional[int] = None
+    track_number: Optional[int] = Field(default=None, ge=1)
 
 
 class AlbumSongOut(BaseModel):
     """
-    Output completo di una riga album_songs.
-    Utile per vedere/gestire la tracklist di un album.
+    Output completo della relazione album-song.
     """
     id: str
-    track_number: Optional[int] = None
+    album_id: str
+    song_id: str
+    track_number: Optional[int] = Field(default=None, ge=1)
 
     album: AlbumRef
     song: SongRef
 
     model_config = ConfigDict(from_attributes=True)
-

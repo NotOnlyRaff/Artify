@@ -1,5 +1,4 @@
 import mimetypes
-import uuid
 from typing import Optional
 
 import cloudinary.uploader
@@ -8,24 +7,29 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from models import album
 from models.album import Album
 from models.albumArtist import AlbumArtist
 from models.albumSong import AlbumSong
 from models.artist import Artist
+from models.enums import AlbumArtistRole, UserRole  # FIX: da enums.py
 from models.song import Song
-from models.songArtist import SongArtist, SongArtistRole
-from models.user import User, UserRole
+from models.user import User
+from schemas.album_schema import AlbumCreate, AlbumUpdate  # FIX: type annotation payload
 
 
 class AlbumService:
+
+    # ------------------------------------------------------------------ #
+    #  Query base                                                         #
+    # ------------------------------------------------------------------ #
+
     @staticmethod
     def _base_query(db: Session):
+        # FIX: Album.artists e Album.songs rimossi — relazioni viewonly eliminate.
+        # Caricamento tramite junction table source-of-truth.
         return db.query(Album).options(
-            joinedload(Album.artists),
-            joinedload(Album.songs),
-            joinedload(Album.album_artist_links),
-            joinedload(Album.album_song_links),
+            joinedload(Album.album_artist_links).joinedload(AlbumArtist.artist),
+            joinedload(Album.album_song_links).joinedload(AlbumSong.song),
         )
 
     @staticmethod
@@ -42,8 +46,8 @@ class AlbumService:
     def _normalize_ids(values: list[str] | None) -> list[str]:
         if not values:
             return []
-        seen = set()
-        ordered = []
+        seen: set[str] = set()
+        ordered: list[str] = []
         for value in values:
             value = str(value).strip()
             if not value or value in seen:
@@ -56,37 +60,30 @@ class AlbumService:
     def _resolve_artists(db: Session, artist_ids: list[str]) -> list[Artist]:
         if not artist_ids:
             return []
-
         artists = db.query(Artist).filter(Artist.id.in_(artist_ids)).all()
-        artist_map = {artist.id: artist for artist in artists}
-
+        artist_map = {a.id: a for a in artists}
         try:
-            ordered = [artist_map[artist_id] for artist_id in artist_ids]
+            return [artist_map[aid] for aid in artist_ids]
         except KeyError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="One or more artist IDs are invalid",
             )
 
-        return ordered
-
     @staticmethod
-    def _resolve_songs(db: Session, song_ids: list[str]) -> list[Song]:
+    def _resolve_songs(db: Session, song_ids: list[str]) -> dict[str, Song]:
+        """Restituisce una mappa song_id → Song per accesso O(1)."""
         if not song_ids:
-            return []
-
+            return {}
         songs = db.query(Song).filter(Song.id.in_(song_ids)).all()
-        song_map = {song.id: song for song in songs}
-
-        try:
-            ordered = [song_map[song_id] for song_id in song_ids]
-        except KeyError:
+        song_map = {s.id: s for s in songs}
+        missing = [sid for sid in song_ids if sid not in song_map]
+        if missing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more song IDs are invalid",
+                detail=f"One or more song IDs are invalid: {missing}",
             )
-
-        return ordered
+        return song_map
 
     @staticmethod
     def _ensure_manageable_artist_ids(
@@ -125,47 +122,64 @@ class AlbumService:
                 detail="You do not have permission to manage this album",
             )
 
-        album_artist_ids = {artist.id for artist in album.artists}
+        # FIX: album.artists rimossa — navigo la junction table source-of-truth.
+        album_artist_ids = {link.artist_id for link in album.album_artist_links}
         if requester.artist_id not in album_artist_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to manage this album",
             )
 
+    # ------------------------------------------------------------------ #
+    #  Lookup                                                             #
+    # ------------------------------------------------------------------ #
+
     @staticmethod
     def get_album_or_404(album_id: str, db: Session) -> Album:
-        album = (
-            AlbumService._base_query(db)
-            .filter(Album.id == str(album_id))
-            .first()
-        )
-
+        # FIX: rimosso str(album_id) ridondante.
+        album = AlbumService._base_query(db).filter(Album.id == album_id).first()
         if not album:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Album not found",
             )
-
         return album
+
+    # ------------------------------------------------------------------ #
+    #  Lista                                                              #
+    # ------------------------------------------------------------------ #
 
     @staticmethod
     def list_albums(
         db: Session,
         artist_id: Optional[str] = None,
-    ) -> list[Album]:
+        limit: int = 20,        # FIX: paginazione aggiunta.
+        offset: int = 0,
+    ) -> dict:
         query = AlbumService._base_query(db)
 
         if artist_id:
-            query = query.join(Album.artists).filter(Artist.id == artist_id)
+            # FIX: Album.artists rimossa — join attraverso la junction table.
+            query = query.join(Album.album_artist_links).filter(
+                AlbumArtist.artist_id == artist_id
+            )
 
-        return query.order_by(Album.release_date.desc().nullslast(), Album.title.asc()).all()
+        total = db.query(Album).count()
+        albums = (
+            query
+            .order_by(Album.release_date.desc().nullslast(), Album.title.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return {"items": albums, "total": total, "limit": limit, "offset": offset}
+
+    # ------------------------------------------------------------------ #
+    #  Upload cover                                                       #
+    # ------------------------------------------------------------------ #
 
     @staticmethod
-    def upload_cover(
-        cover: UploadFile,
-        db: Session,
-        requester_id: str,
-    ) -> str:
+    def upload_cover(cover: UploadFile, db: Session, requester_id: str) -> str:
         requester = AlbumService._get_requester_or_404(db, requester_id)
 
         if requester.role not in {UserRole.ADMIN, UserRole.ARTIST}:
@@ -173,7 +187,6 @@ class AlbumService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only artists or admins can upload album covers",
             )
-
         if requester.role == UserRole.ARTIST and not requester.artist_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -182,17 +195,15 @@ class AlbumService:
 
         content_type = cover.content_type
         guessed_type, _ = mimetypes.guess_type(cover.filename or "")
-
         is_image_type = (
             (content_type and content_type.startswith("image/"))
             or (guessed_type and guessed_type.startswith("image/"))
             or content_type == "application/octet-stream"
         )
-
         if not is_image_type:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid file type. Upload an image.",
+                detail="Invalid file type — upload an image",
             )
 
         try:
@@ -213,102 +224,66 @@ class AlbumService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Album cover upload succeeded but no secure_url was returned",
             )
-
         return cover_url
 
+    # ------------------------------------------------------------------ #
+    #  Creazione                                                          #
+    # ------------------------------------------------------------------ #
+
     @staticmethod
-    def create_album(payload, db: Session, requester_id: str) -> Album:
+    def create_album(
+        payload: AlbumCreate,   # FIX: type annotation esplicita
+        db: Session,
+        requester_id: str,
+    ) -> Album:
         requester = AlbumService._get_requester_or_404(db, requester_id)
 
         artist_ids = AlbumService._ensure_manageable_artist_ids(
-            requester,
-            getattr(payload, "artist_ids", []),
+            requester, payload.artist_ids or []
         )
-
         resolved_artists = AlbumService._resolve_artists(db, artist_ids)
-        existing_song_ids = AlbumService._normalize_ids(getattr(payload, "song_ids", []))
-        existing_songs = AlbumService._resolve_songs(db, existing_song_ids)
 
-        album_id = str(uuid.uuid4())
+        # FIX: usa payload.song_links (schema aggiornato) invece del vecchio
+        # song_ids + new_songs che mescolava creazione e collegamento.
+        song_ids = [link.song_id for link in payload.song_links]
+        song_map = AlbumService._resolve_songs(db, song_ids)
+
+        # FIX: id non passato — default del model.
+        # FIX: cover_url convertita a str da AnyHttpUrl.
         db_album = Album(
-            id=album_id,
             title=payload.title,
             release_date=payload.release_date,
             label=payload.label,
             album_type=payload.album_type,
             genre=payload.genre,
-            cover_url=payload.cover_url,
+            cover_url=str(payload.cover_url) if payload.cover_url else None,
         )
 
         try:
             db.add(db_album)
-            db.flush()
+            db.flush()  # ottieni db_album.id prima dei link
 
-            all_songs_ordered: list[Song] = list(existing_songs)
-
-            for track in getattr(payload, "new_songs", []) or []:
-                new_song = Song(
-                    id=str(uuid.uuid4()),
-                    song_name=track.song_name,
-                    song_url=track.song_url,
-                    thumbnail_url=track.thumbnail_url or payload.cover_url,
-                    release_date=track.release_date or payload.release_date,
-                    genre=track.genre or payload.genre,
-                    user_id=requester.id,
-                )
-                db.add(new_song)
-                db.flush()
-
-                track_artist_ids = AlbumService._normalize_ids(
-                    getattr(track, "artist_ids", None) or artist_ids
-                )
-
-                if requester.role == UserRole.ARTIST and requester.artist_id:
-                    if requester.artist_id not in track_artist_ids:
-                        track_artist_ids.append(requester.artist_id)
-
-                resolved_track_artists = AlbumService._resolve_artists(
-                    db,
-                    track_artist_ids,
-                )
-
-                artist_roles = getattr(track, "artist_roles", None) or {}
-
-                for artist in resolved_track_artists:
-                    role = artist_roles.get(artist.id, SongArtistRole.PRIMARY)
-                    db.add(
-                        SongArtist(
-                            id=str(uuid.uuid4()),
-                            song=new_song,
-                            artist=artist,
-                            role=role,
-                        )
-                    )
-
-                all_songs_ordered.append(new_song)
-
+            # FIX: AlbumArtistRole.PRIMARY esplicito — role non è più nullable.
+            # FIX: id non passato.
             db_album.album_artist_links = [
-                AlbumArtist(
-                    id=str(uuid.uuid4()),
-                    album=db_album,
-                    artist=artist,
-                )
+                AlbumArtist(album=db_album, artist=artist, role=AlbumArtistRole.PRIMARY)
                 for artist in resolved_artists
             ]
 
+            # FIX: track_number preso direttamente da payload.song_links.
+            # FIX: id non passato.
+            # FIX: total_tracks rimosso — campo non presente nel model migrato.
             db_album.album_song_links = [
                 AlbumSong(
-                    id=str(uuid.uuid4()),
                     album=db_album,
-                    song=song,
-                    track_number=index + 1,
+                    song=song_map[link.song_id],
+                    track_number=link.track_number,
                 )
-                for index, song in enumerate(all_songs_ordered)
+                for link in payload.song_links
             ]
 
-            db_album.total_tracks = len(all_songs_ordered)
-
             db.commit()
+
         except IntegrityError as e:
             db.rollback()
             raise HTTPException(
@@ -325,64 +300,60 @@ class AlbumService:
                 detail=f"Album creation failed: {str(e)}",
             )
 
-        return AlbumService.get_album_or_404(album_id, db)
+        return AlbumService.get_album_or_404(db_album.id, db)
+
+    # ------------------------------------------------------------------ #
+    #  Aggiornamento                                                      #
+    # ------------------------------------------------------------------ #
 
     @staticmethod
-    def update_album(album_id: str, payload, db: Session, requester_id: str) -> Album:
+    def update_album(
+        album_id: str,
+        payload: AlbumUpdate,   # FIX: type annotation esplicita
+        db: Session,
+        requester_id: str,
+    ) -> Album:
         requester = AlbumService._get_requester_or_404(db, requester_id)
         album = AlbumService.get_album_or_404(album_id, db)
-
         AlbumService._assert_album_ownership(album, requester)
 
         try:
             update_dict = payload.model_dump(exclude_unset=True)
 
-            for field in [
-                "title",
-                "release_date",
-                "label",
-                "album_type",
-                "genre",
-                "cover_url",
-            ]:
+            for field in ("title", "release_date", "label", "album_type", "genre"):
                 if field in update_dict:
                     setattr(album, field, update_dict[field])
 
+            # FIX: cover_url convertita a str da AnyHttpUrl.
+            if "cover_url" in update_dict:
+                raw = update_dict["cover_url"]
+                album.cover_url = str(raw) if raw else None
+
             if "artist_ids" in update_dict:
                 artist_ids = AlbumService._ensure_manageable_artist_ids(
-                    requester,
-                    update_dict["artist_ids"],
+                    requester, update_dict["artist_ids"]
                 )
                 resolved_artists = AlbumService._resolve_artists(db, artist_ids)
-
                 album.album_artist_links.clear()
                 for artist in resolved_artists:
+                    # FIX: AlbumArtistRole.PRIMARY — role NOT NULL nel model.
+                    # FIX: id non passato.
                     album.album_artist_links.append(
-                        AlbumArtist(
-                            id=str(uuid.uuid4()),
-                            album=album,
-                            artist=artist,
-                        )
+                        AlbumArtist(album=album, artist=artist, role=AlbumArtistRole.PRIMARY)
                     )
 
             if "song_ids" in update_dict:
                 song_ids = AlbumService._normalize_ids(update_dict["song_ids"])
-                resolved_songs = AlbumService._resolve_songs(db, song_ids)
-
+                song_map = AlbumService._resolve_songs(db, song_ids)
                 album.album_song_links.clear()
-                for index, song in enumerate(resolved_songs):
+                for index, song_id in enumerate(song_ids):
+                    # FIX: id non passato. FIX: total_tracks rimosso.
                     album.album_song_links.append(
-                        AlbumSong(
-                            id=str(uuid.uuid4()),
-                            album=album,
-                            song=song,
-                            track_number=index + 1,
-                        )
+                        AlbumSong(album=album, song=song_map[song_id], track_number=index + 1)
                     )
 
-                album.total_tracks = len(resolved_songs)
-
             db.commit()
+
         except IntegrityError as e:
             db.rollback()
             raise HTTPException(
@@ -401,20 +372,23 @@ class AlbumService:
 
         return AlbumService.get_album_or_404(album_id, db)
 
+    # ------------------------------------------------------------------ #
+    #  Eliminazione                                                       #
+    # ------------------------------------------------------------------ #
+
     @staticmethod
     def delete_album(album_id: str, db: Session, requester_id: str) -> None:
         requester = AlbumService._get_requester_or_404(db, requester_id)
         album = AlbumService.get_album_or_404(album_id, db)
-
         AlbumService._assert_album_ownership(album, requester)
 
         try:
-            # 1. Prendiamo gli ID delle song collegate a questo album
-            linked_song_ids = [song.id for song in album.songs]
+            # FIX: album.songs rimossa — leggo gli ID dalla junction table.
+            linked_song_ids = [link.song_id for link in album.album_song_links]
 
-            # 2. Capire quali song appartengono SOLO a questo album
-            #    e quindi possono essere eliminate in sicurezza
-            exclusive_song_ids = []
+            # Individua le song che appartengono SOLO a questo album
+            # e che quindi possono essere eliminate in sicurezza.
+            exclusive_song_ids: list[str] = []
             if linked_song_ids:
                 counts = (
                     db.query(
@@ -425,24 +399,15 @@ class AlbumService:
                     .group_by(AlbumSong.song_id)
                     .all()
                 )
-
                 exclusive_song_ids = [
                     row.song_id for row in counts if row.album_count == 1
                 ]
 
-            # 3. Elimina prima l'album
             db.delete(album)
             db.flush()
 
-            # 4. Elimina le song che esistevano solo dentro questo album
             if exclusive_song_ids:
-                songs_to_delete = (
-                    db.query(Song)
-                    .filter(Song.id.in_(exclusive_song_ids))
-                    .all()
-                )
-
-                for song in songs_to_delete:
+                for song in db.query(Song).filter(Song.id.in_(exclusive_song_ids)).all():
                     db.delete(song)
 
             db.commit()
@@ -454,5 +419,5 @@ class AlbumService:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Album deletion failed: error: {str(e)}",
+                detail=f"Album deletion failed: {str(e)}",
             )

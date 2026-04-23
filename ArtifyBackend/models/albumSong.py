@@ -1,35 +1,32 @@
-from sqlalchemy import TEXT, Column, ForeignKey, Integer, UniqueConstraint
-from sqlalchemy.orm import relationship
-from models.base import Base
+import uuid
+from typing import Optional
+
+from sqlalchemy import TEXT, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from models.base import Base, TimestampMixin
 
 
-class AlbumSong(Base):
+class AlbumSong(TimestampMixin, Base):
     __tablename__ = "album_songs"
 
-    id = Column(TEXT, primary_key=True)
+    id: Mapped[str] = mapped_column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    album_id = Column(
+    album_id: Mapped[str] = mapped_column(
         TEXT,
         ForeignKey("albums.id", ondelete="CASCADE"),
-        nullable=False,
+        index=True,
     )
-    song_id = Column(
+    song_id: Mapped[str] = mapped_column(
         TEXT,
         ForeignKey("songs.id", ondelete="CASCADE"),
-        nullable=False,
+        index=True,
     )
-
-    track_number = Column(Integer, nullable=True)
+    track_number: Mapped[Optional[int]]
 
     __table_args__ = (
         UniqueConstraint("album_id", "song_id", name="uq_album_song"),
     )
 
-    album = relationship(
-        "Album",
-        back_populates="album_song_links",
-    )
-    song = relationship(
-        "Song",
-        back_populates="album_song_links",
-    )
+    album: Mapped["Album"] = relationship(back_populates="album_song_links")
+    song: Mapped["Song"] = relationship(back_populates="album_song_links")

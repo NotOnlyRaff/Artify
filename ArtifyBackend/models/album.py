@@ -1,51 +1,35 @@
-from sqlalchemy import TEXT, Column, VARCHAR, Date, Integer
-from sqlalchemy.orm import relationship
-from models.base import Base
+import uuid
+from datetime import date
+from typing import List, Optional
+
+from sqlalchemy import TEXT, VARCHAR
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from models.base import Base, TimestampMixin
 
 
-class Album(Base):
+class Album(TimestampMixin, Base):
     __tablename__ = "albums"
 
-    id = Column(TEXT, primary_key=True)
+    id: Mapped[str] = mapped_column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    title = Column(VARCHAR(200), nullable=False)
-    cover_url = Column(TEXT, nullable=True)
-    release_date = Column(Date, nullable=True)
-    label = Column(VARCHAR(120), nullable=True)
-    total_tracks = Column(Integer, nullable=True)
-    album_type = Column(VARCHAR(30), nullable=True)
-    genre = Column(VARCHAR(30), nullable=True)
+    title: Mapped[str] = mapped_column(VARCHAR(200))
+    cover_url: Mapped[Optional[str]] = mapped_column(TEXT)
+    release_date: Mapped[Optional[date]]
+    label: Mapped[Optional[str]] = mapped_column(VARCHAR(120))
+    album_type: Mapped[Optional[str]] = mapped_column(VARCHAR(30))
+    genre: Mapped[Optional[str]] = mapped_column(VARCHAR(30))
 
-    # --- Relazioni ---
+    # --- Relazioni (source of truth) ---
 
-    # Join esplicita verso artisti
-    album_artist_links = relationship(
-        "AlbumArtist",
+    album_artist_links: Mapped[List["AlbumArtist"]] = relationship(
+        back_populates="album",
+        cascade="all, delete-orphan",
+    )
+    album_song_links: Mapped[List["AlbumSong"]] = relationship(
         back_populates="album",
         cascade="all, delete-orphan",
     )
 
-    # Lista di artisti (sola lettura, via tabella di join)
-    artists = relationship(
-        "Artist",
-        secondary="album_artists",
-        viewonly=True,
-        back_populates="albums",
-        overlaps="album_artist_links,artist,album,artists",
-    )
-
-    # Join esplicita verso canzoni
-    album_song_links = relationship(
-        "AlbumSong",
-        back_populates="album",
-        cascade="all, delete-orphan",
-    )
-
-    # Lista di canzoni (sola lettura, via tabella di join)
-    songs = relationship(
-        "Song",
-        secondary="album_songs",
-        viewonly=True,
-        back_populates="albums",
-        overlaps="album_song_links,album,song,albums",
-    )
+    def __repr__(self) -> str:
+        return f"<Album id={self.id!r} title={self.title!r}>"

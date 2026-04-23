@@ -1,22 +1,20 @@
-import os
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from google.cloud.sql.connector import Connector
 
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL mancante nel file .env")
+from core.config import settings  # FIX: usa settings invece di os.getenv() diretto
 
 
+# FIX: engine creato una sola volta usando settings.DATABASE_URL.
+# Rimosso load_dotenv() + os.getenv() + RuntimeError — la validazione
+# avviene già in pydantic_settings al momento dell'import di settings.
 engine = create_engine(
-    DATABASE_URL,
+    settings.DATABASE_URL,
     pool_pre_ping=True,
 )
-SessionLocal = sessionmaker(autocommit = False, autoflush=False, bind=engine)
+
+# FIX: SessionLocal e get_db definiti una sola volta — erano duplicati.
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     db = SessionLocal()
@@ -44,11 +42,11 @@ def get_db():
 #)#
 
 # create SQLAlchemy ORM session
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+#SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+#def get_db():
+##    db = SessionLocal()
+#    try:
+#        yield db
+#    finally:
+#        db.close()

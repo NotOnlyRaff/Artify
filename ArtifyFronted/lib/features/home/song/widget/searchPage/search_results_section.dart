@@ -10,7 +10,8 @@ class SearchResultsSection extends StatelessWidget {
   final List<ArtistModel> artists;
   final List<AlbumModel> albums;
   final String query;
-  final Function(SongModel) onSongTap;
+  final Future<void> Function(List<SongModel> songs, int index) onSongTap;
+  final Future<void> Function(List<SongModel> songs, int index) onSongMoreTap;
 
   const SearchResultsSection({
     super.key,
@@ -19,6 +20,7 @@ class SearchResultsSection extends StatelessWidget {
     required this.albums,
     required this.query,
     required this.onSongTap,
+    required this.onSongMoreTap,
   });
 
   @override
@@ -73,8 +75,15 @@ class SearchResultsSection extends StatelessWidget {
         if (songMatches.isNotEmpty) ...[
           const _SectionTitle('Songs'),
           const SizedBox(height: 8),
-          ...songMatches
-              .map((s) => _SongResultTile(song: s, onSongTap: onSongTap)),
+          ...songMatches.asMap().entries.map(
+                (entry) => _SongResultTile(
+                  song: entry.value,
+                  index: entry.key,
+                  songMatches: songMatches,
+                  onSongTap: onSongTap,
+                  onSongMoreTap: onSongMoreTap,
+                ),
+              ),
           const SizedBox(height: 24),
         ],
         if (artistMatches.isNotEmpty) ...[
@@ -114,9 +123,18 @@ class _SectionTitle extends StatelessWidget {
 /// SONG TILE -----------------------------------------------------------------
 class _SongResultTile extends StatelessWidget {
   final SongModel song;
-  final Function(SongModel) onSongTap;
+  final int index;
+  final List<SongModel> songMatches;
+  final Future<void> Function(List<SongModel> songs, int index) onSongTap;
+  final Future<void> Function(List<SongModel> songs, int index) onSongMoreTap;
 
-  const _SongResultTile({required this.song, required this.onSongTap});
+  const _SongResultTile({
+    required this.song,
+    required this.index,
+    required this.songMatches,
+    required this.onSongTap,
+    required this.onSongMoreTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -188,9 +206,8 @@ class _SongResultTile extends StatelessWidget {
           Icons.play_arrow_rounded,
           color: Colors.white70,
         ),
-        onTap: () {
-          onSongTap(song);
-        },
+        onTap: () => onSongTap(songMatches, index),
+        onLongPress: () => onSongMoreTap(songMatches, index),
       ),
     );
   }

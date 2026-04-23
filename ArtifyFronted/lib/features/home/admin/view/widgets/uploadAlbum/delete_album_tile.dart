@@ -16,10 +16,12 @@ class DeleteAlbumTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtitleParts = <String>[];
     if (album.label?.isNotEmpty ?? false) subtitleParts.add(album.label!);
-    if (album.releaseDate != null)
+    if (album.releaseDate != null) {
       subtitleParts.add(album.releaseDate!.year.toString());
-    if (album.albumType?.isNotEmpty ?? false)
+    }
+    if (album.albumType?.isNotEmpty ?? false) {
       subtitleParts.add(album.albumType!.toUpperCase());
+    }
 
     final subtitle =
         subtitleParts.isEmpty ? 'Album' : subtitleParts.join(' • ');

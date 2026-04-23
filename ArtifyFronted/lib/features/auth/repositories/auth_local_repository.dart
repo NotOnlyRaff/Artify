@@ -1,5 +1,5 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 part 'auth_local_repository.g.dart';
 
@@ -8,31 +8,38 @@ AuthLocalRepository authLocalRepository(AuthLocalRepositoryRef ref) {
   return AuthLocalRepository();
 }
 
+/// Repository per la persistenza locale delle credenziali di sessione.
+///
+/// FIX (Sicurezza): migrato da SharedPreferences a flutter_secure_storage.
+/// SharedPreferences salva in plain text — leggibile su device rooted/jailbroken.
+/// flutter_secure_storage usa Keychain (iOS) e EncryptedSharedPreferences (Android).
+///
+/// Aggiungi al pubspec.yaml:
+///   flutter_secure_storage: ^9.0.0
+///
+/// Android: minSdkVersion >= 18 in android/app/build.gradle.
+/// iOS: nessuna configurazione extra necessaria.
 class AuthLocalRepository {
-  SharedPreferences? _sharedPreferences;
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
 
-  Future<void> init() async {
-    _sharedPreferences ??= await SharedPreferences.getInstance();
-  }
+  static const _tokenKey = 'x-auth-token';
 
   Future<void> setToken(String? token) async {
-    await init();
-
-    if (token == null) {
-      await _sharedPreferences!.remove('x-auth-token');
+    if (token == null || token.isEmpty) {
+      await _storage.delete(key: _tokenKey);
       return;
     }
-
-    await _sharedPreferences!.setString('x-auth-token', token);
+    await _storage.write(key: _tokenKey, value: token);
   }
 
   Future<String?> getToken() async {
-    await init();
-    return _sharedPreferences!.getString('x-auth-token');
+    return _storage.read(key: _tokenKey);
   }
 
   Future<void> removeToken() async {
-    await init();
-    await _sharedPreferences!.remove('x-auth-token');
+    await _storage.delete(key: _tokenKey);
   }
 }

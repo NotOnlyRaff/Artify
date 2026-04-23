@@ -1,38 +1,35 @@
-import enum
+import uuid
 
-from sqlalchemy import TEXT, Column, ForeignKey, Enum as SAEnum, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import TEXT, ForeignKey, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models.base import Base
-
-
-class SongArtistRole(enum.Enum):
-    PRIMARY = "primary"
-    FEATURED = "featured"
-    PRODUCER = "producer"
-    MIXER = "mixer"
-    WRITER = "writer"
+from models.base import Base, TimestampMixin
+from models.enums import SongArtistRole
 
 
-class SongArtist(Base):
+class SongArtist(TimestampMixin, Base):
     __tablename__ = "song_artists"
 
-    id = Column(TEXT, primary_key=True)
+    id: Mapped[str] = mapped_column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    song_id = Column(
+    song_id: Mapped[str] = mapped_column(
         TEXT,
         ForeignKey("songs.id", ondelete="CASCADE"),
-        nullable=False,
+        index=True,
     )
-    artist_id = Column(
+    artist_id: Mapped[str] = mapped_column(
         TEXT,
         ForeignKey("artists.id", ondelete="CASCADE"),
-        nullable=False,
+        index=True,
     )
-
-    role = Column(
-        SAEnum(SongArtistRole, name="song_artist_role"),
-        nullable=False,
+    role: Mapped[SongArtistRole] = mapped_column(
+        SAEnum(
+            SongArtistRole,
+            name="song_artist_role",
+            values_callable=lambda x: [e.value for e in x],
+            validate_strings=True,
+        ),
         default=SongArtistRole.PRIMARY,
     )
 
@@ -40,8 +37,8 @@ class SongArtist(Base):
         UniqueConstraint("song_id", "artist_id", "role", name="uq_song_artist_role"),
     )
 
-    song = relationship("Song", back_populates="song_artist_links")
-    artist = relationship("Artist", back_populates="song_artist_links")
+    song: Mapped["Song"] = relationship(back_populates="song_artist_links")
+    artist: Mapped["Artist"] = relationship(back_populates="song_artist_links")
 
     def __repr__(self) -> str:
         return (

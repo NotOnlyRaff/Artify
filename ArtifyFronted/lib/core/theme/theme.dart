@@ -31,7 +31,6 @@ class AppTheme {
         primary: Pallete.primary,
         secondary: Pallete.accentCyan,
         surface: Pallete.surfaceSecondary,
-        background: Pallete.backgroundColor,
         error: Pallete.errorColor,
       ),
 
@@ -102,8 +101,7 @@ class AppTheme {
       iconTheme: const IconThemeData(
         color: Pallete.whiteColor,
       ),
-
-      dialogBackgroundColor: Pallete.surfacePrimary,
+      dialogTheme: DialogThemeData(backgroundColor: Pallete.surfacePrimary),
     );
   }
 }

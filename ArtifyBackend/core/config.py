@@ -1,58 +1,39 @@
-import os
-from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# carica le variabili dal file .env
-load_dotenv()
+# Path assoluto verso la root del progetto (ArtifyBackend/)
+# __file__ = ArtifyBackend/core/config.py
+# .parent   = ArtifyBackend/core/
+# .parent   = ArtifyBackend/          ← qui sta il .env
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    """
-    Configurazione centrale dell'applicazione.
-    Tutte le variabili di ambiente vengono lette da qui.
-    """
-
-    # =========================
-    # APP
-    # =========================
+    # App
     APP_NAME: str = "Artify API"
-    ENV: str = os.getenv("ENV", "development")
+    ENV: str = "development"
 
-    # =========================
-    # DATABASE
-    # =========================
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL"
-    )
+    # Database
+    DATABASE_URL: str
 
-    # =========================
-    # JWT AUTH
-    # =========================
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY")
+    # JWT
+    JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", 60 * 24))
+    JWT_EXPIRE_DAYS: int = 7
 
-    # =========================
-    # PASSWORD HASH
-    # =========================
+    # Bcrypt
     BCRYPT_ROUNDS: int = 12
 
-    # =========================
-    # STORAGE (future)
-    # =========================
-    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "local")
-    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "artify")
-    
-    # =========================
-    # CLOUDINARY 
-    # =========================
+    # Cloudinary
     CLOUDINARY_CLOUD_NAME: str
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        # Path assoluto: non dipende da dove viene avviato fastapi run.
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+    )
+
 
 settings = Settings()
-print(f"DEBUG: Cloud Name caricato -> {getattr(settings, 'CLOUDINARY_CLOUD_NAME', 'NON TROVATO')}")

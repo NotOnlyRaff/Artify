@@ -4,19 +4,10 @@ import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/album/repositories/album_local_repository.dart';
 import 'package:client/features/home/album/repositories/album_remote_repository.dart';
-import 'package:client/features/home/song/model/song_model.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'album_viewmodel.g.dart';
-
-Future<String> _readStoredAlbumToken() async {
-  final token = await AuthLocalRepository().getToken();
-  if (token == null || token.isEmpty) {
-    throw Exception('User not authenticated');
-  }
-  return token;
-}
 
 /// ───────────────── PROVIDER: LISTA ALBUM ─────────────────
 @riverpod
@@ -24,13 +15,12 @@ Future<List<AlbumModel>> getAllAlbums(
   GetAllAlbumsRef ref, {
   String? artistId,
 }) async {
-  final token = await _readStoredAlbumToken();
-  final repo = ref.watch(albumRemoteRepositoryProvider);
+  // FIX: usa il provider Riverpod invece di AuthLocalRepository() diretto.
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
 
-  final res = await repo.listAlbums(
-    token: token,
-    artistId: artistId,
-  );
+  final repo = ref.watch(albumRemoteRepositoryProvider);
+  final res = await repo.listAlbums(token: token, artistId: artistId);
 
   return switch (res) {
     Left(value: final failure) => throw failure.message,
@@ -40,17 +30,13 @@ Future<List<AlbumModel>> getAllAlbums(
 
 /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
 @riverpod
-Future<AlbumModel> getAlbum(
-  GetAlbumRef ref,
-  String albumId,
-) async {
-  final token = await _readStoredAlbumToken();
-  final repo = ref.watch(albumRemoteRepositoryProvider);
+Future<AlbumModel> getAlbum(GetAlbumRef ref, String albumId) async {
+  // FIX: usa il provider Riverpod.
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
 
-  final res = await repo.getAlbum(
-    albumId: albumId,
-    token: token,
-  );
+  final repo = ref.watch(albumRemoteRepositoryProvider);
+  final res = await repo.getAlbum(albumId: albumId, token: token);
 
   return switch (res) {
     Left(value: final failure) => throw failure.message,
@@ -62,38 +48,37 @@ Future<AlbumModel> getAlbum(
 @riverpod
 class AlbumViewModel extends _$AlbumViewModel {
   AlbumRemoteRepository get _remote => ref.read(albumRemoteRepositoryProvider);
-
   AlbumLocalRepository get _local => ref.read(albumLocalRepositoryProvider);
 
-  AuthLocalRepository get _authLocalRepository => AuthLocalRepository();
+  // FIX: usa il provider invece di AuthLocalRepository() diretto.
+  AuthLocalRepository get _authLocalRepository =>
+      ref.read(authLocalRepositoryProvider);
 
   @override
-  AsyncValue? build() {
-    return null;
-  }
+  AsyncValue? build() => null;
 
   Future<String> _requireToken() async {
+    // FIX: legge da flutter_secure_storage tramite provider.
     final token = await _authLocalRepository.getToken();
-    if (token == null || token.isEmpty) {
+    if (token == null || token.isEmpty)
       throw Exception('User not authenticated');
-    }
     return token;
   }
+
+  // ────────────── UPLOAD COVER ──────────────
 
   Future<Either<AppFailure, String>> uploadAlbumCover({
     required PickedMedia cover,
   }) async {
     try {
       final token = await _requireToken();
-
-      return await _remote.uploadAlbumCover(
-        cover: cover,
-        token: token,
-      );
+      return await _remote.uploadAlbumCover(cover: cover, token: token);
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
   }
+
+  // ────────────── CREAZIONE ──────────────
 
   Future<void> createAlbum({
     required String title,
@@ -104,7 +89,6 @@ class AlbumViewModel extends _$AlbumViewModel {
     String? coverUrl,
     List<String> artistIds = const [],
     List<String> songIds = const [],
-    List<SongModel> newSongs = const [],
   }) async {
     state = const AsyncValue.loading();
 
@@ -120,7 +104,6 @@ class AlbumViewModel extends _$AlbumViewModel {
         coverUrl: coverUrl,
         artistIds: artistIds,
         songIds: songIds,
-        newSongs: newSongs,
         token: token,
       );
 
@@ -131,12 +114,17 @@ class AlbumViewModel extends _$AlbumViewModel {
         case Right(value: final album):
           ref.invalidate(getAllAlbumsProvider);
           ref.invalidate(getAlbumProvider(album.id));
+          try {
+            await _local.saveRecentlyOpened(album);
+          } catch (_) {}
           state = AsyncValue.data(album);
       }
     } catch (e) {
       state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }
+
+  // ────────────── AGGIORNAMENTO ──────────────
 
   Future<void> updateAlbum({
     required String albumId,
@@ -174,6 +162,9 @@ class AlbumViewModel extends _$AlbumViewModel {
         case Right(value: final album):
           ref.invalidate(getAllAlbumsProvider);
           ref.invalidate(getAlbumProvider(albumId));
+          try {
+            await _local.saveRecentlyOpened(album);
+          } catch (_) {}
           state = AsyncValue.data(album);
       }
     } catch (e) {
@@ -181,16 +172,15 @@ class AlbumViewModel extends _$AlbumViewModel {
     }
   }
 
+  // ────────────── ELIMINAZIONE ──────────────
+
   Future<void> deleteAlbum(String albumId) async {
     state = const AsyncValue.loading();
 
     try {
       final token = await _requireToken();
 
-      final res = await _remote.deleteAlbum(
-        albumId: albumId,
-        token: token,
-      );
+      final res = await _remote.deleteAlbum(albumId: albumId, token: token);
 
       switch (res) {
         case Left(value: final failure):
@@ -208,17 +198,12 @@ class AlbumViewModel extends _$AlbumViewModel {
     }
   }
 
-  /// ────────────── CACHE LOCALE (Hive) ──────────────
+  // ────────────── CACHE LOCALE ──────────────
 
-  List<AlbumModel> getRecentlyOpenedAlbums() {
-    return _local.loadRecentlyOpened();
-  }
+  List<AlbumModel> getRecentlyOpenedAlbums() => _local.loadRecentlyOpened();
 
-  Future<void> markAlbumOpened(AlbumModel album) async {
-    await _local.saveRecentlyOpened(album);
-  }
+  Future<void> markAlbumOpened(AlbumModel album) =>
+      _local.saveRecentlyOpened(album);
 
-  Future<void> clearRecentlyOpenedAlbums() async {
-    await _local.clearAll();
-  }
+  Future<void> clearRecentlyOpenedAlbums() => _local.clearAll();
 }

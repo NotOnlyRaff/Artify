@@ -1,23 +1,20 @@
-# pydantic_schemas/favorite.py
-
+from datetime import datetime
 from typing import Optional
-
-from pydantic import BaseModel, ConfigDict
-
-from schemas.album_schema import SongRef  # id, song_name, thumbnail_url
+from pydantic import BaseModel, ConfigDict, Field
+from schemas.refs import SongRef
 
 
 class FavoriteBase(BaseModel):
     """
-    Base comune: identifica la canzone da mettere/togliere dai preferiti.
-    Di solito l'utente viene preso dal token, quindi user_id non serve in input.
+    Base comune: identifica la canzone da aggiungere/rimuovere dai preferiti.
+    L'utente viene dedotto dal token/autenticazione.
     """
-    song_id: str
+    song_id: str = Field(min_length=1)
 
 
 class FavoriteCreate(FavoriteBase):
     """
-    Payload usato per aggiungere un brano ai preferiti dell'utente corrente.
+    Payload per aggiungere un brano ai preferiti dell'utente corrente.
     """
     pass
 
@@ -25,13 +22,12 @@ class FavoriteCreate(FavoriteBase):
 class FavoriteOut(BaseModel):
     """
     Rappresentazione di una riga della tabella favorites.
-    Puoi esporre user_id o meno a seconda delle tue esigenze API.
     """
     id: str
     user_id: str
     song_id: str
+    created_at: datetime
 
-    # opzionale: includi anche i dati della canzone agganciata
     song: Optional[SongRef] = None
 
     model_config = ConfigDict(from_attributes=True)

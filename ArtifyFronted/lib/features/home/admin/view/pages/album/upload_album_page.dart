@@ -126,7 +126,6 @@ class _UploadAlbumPageState extends ConsumerState<UploadAlbumPage> {
               .where((t) => t.existingSong != null)
               .map((e) => e.existingSong!.id)
               .toList(),
-          newSongs: newSongs,
         );
   }
 

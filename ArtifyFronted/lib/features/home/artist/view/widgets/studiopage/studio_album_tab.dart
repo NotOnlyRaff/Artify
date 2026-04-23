@@ -104,8 +104,9 @@ class _StudioAlbumTabState extends ConsumerState<StudioAlbumTab> {
     setState(() => _selectedAlbumArtists.removeWhere((a) => a.id == artist.id));
   }
 
-  void _addExistingTrack(SongModel song) {
-    final alreadyAdded = _tracks.any((t) => t.existingSong?.id == song.id);
+  void _addExistingTrack(ArtistSongRef song) {
+    final alreadyAdded =
+        _tracks.any((t) => t.existingSong?.songId == song.songId);
     if (alreadyAdded) return;
 
     setState(() {
@@ -264,7 +265,7 @@ class _StudioAlbumTabState extends ConsumerState<StudioAlbumTab> {
 
       for (final entry in _tracks) {
         if (entry.existingSong != null) {
-          existingSongIds.add(entry.existingSong!.id);
+          existingSongIds.add(entry.existingSong!.songId);
           continue;
         }
 
@@ -414,10 +415,10 @@ class _StudioAlbumTabState extends ConsumerState<StudioAlbumTab> {
                             primaryArtist.songs.where((song) {
                           final query = _trackSearchQuery.trim().toLowerCase();
                           final matchesQuery = query.isEmpty ||
-                              song.songName.toLowerCase().contains(query);
-
+                              (song.songName?.toLowerCase().contains(query) ??
+                                  false);
                           final alreadySelected = _tracks.any(
-                            (t) => t.existingSong?.id == song.id,
+                            (t) => t.existingSong?.songId == song.songId,
                           );
 
                           return matchesQuery && !alreadySelected;
@@ -471,7 +472,7 @@ class _StudioAlbumTabState extends ConsumerState<StudioAlbumTab> {
     required Key key,
     required ArtistModel primaryArtist,
     required AsyncValue<List<ArtistModel>> artistsAsync,
-    required List<SongModel> availableLibrarySongs,
+    required List<ArtistSongRef> availableLibrarySongs,
   }) {
     switch (_currentTabIndex) {
       case 0:
@@ -736,13 +737,13 @@ class _StudioAlbumInfoStep extends StatelessWidget {
 
 class _StudioAlbumTracksStep extends StatelessWidget {
   final List<_StudioAlbumTrackEntry> tracks;
-  final List<SongModel> availableLibrarySongs;
+  final List<ArtistSongRef> availableLibrarySongs;
 
   final TextEditingController trackSearchController;
   final String trackSearchQuery;
   final ValueChanged<String> onTrackSearchChanged;
 
-  final ValueChanged<SongModel> onAddExistingTrack;
+  final ValueChanged<ArtistSongRef> onAddExistingTrack;
   final ValueChanged<_StudioAlbumTrackEntry> onRemoveTrack;
   final void Function(int from, int to) onMoveTrack;
   final Future<void> Function() onCreateLocalTrack;
@@ -766,7 +767,7 @@ class _StudioAlbumTracksStep extends StatelessWidget {
     final filteredLibrarySongs = availableLibrarySongs
         .where((song) => trimmedQuery.isEmpty
             ? true
-            : song.songName.toLowerCase().contains(trimmedQuery))
+            : (song.songName?.toLowerCase().contains(trimmedQuery) ?? false))
         .take(8)
         .toList();
 
@@ -997,7 +998,7 @@ class _StudioAlbumTracksStep extends StatelessWidget {
                         color: Colors.white70,
                       ),
                       title: Text(
-                        song.songName,
+                        song.songName ?? 'Unknown title',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.plusJakartaSans(
@@ -1633,7 +1634,10 @@ class _StudioNewTrackSheetState extends ConsumerState<_StudioNewTrackSheet> {
 }
 
 class _StudioAlbumTrackEntry {
-  final SongModel? existingSong;
+  // FIX: migrato da SongModel? ad ArtistSongRef?.
+  // L'artista espone le sue song come ArtistSongRef (non SongModel completo).
+  // I campi necessari (songId, songName) sono tutti presenti in ArtistSongRef.
+  final ArtistSongRef? existingSong;
   final _StudioLocalAlbumTrack? local;
 
   const _StudioAlbumTrackEntry.existing(this.existingSong) : local = null;
@@ -1641,7 +1645,8 @@ class _StudioAlbumTrackEntry {
 
   bool get isLocal => local != null;
 
-  String get key => existingSong?.id ?? 'local-${local!.localId}';
+  // FIX: .id → .songId
+  String get key => existingSong?.songId ?? 'local-${local!.localId}';
 
   String get displayTitle =>
       existingSong?.songName ??
@@ -1650,7 +1655,8 @@ class _StudioAlbumTrackEntry {
 
   String get displaySubtitle {
     if (existingSong != null) {
-      return existingSong!.genre ?? 'Existing track';
+      // ArtistSongRef non ha genre — usiamo il role come etichetta.
+      return 'Existing track';
     }
     final genre = local?.genreController.text.trim();
     return (genre != null && genre.isNotEmpty) ? genre : 'New upload';

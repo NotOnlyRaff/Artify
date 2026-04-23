@@ -1,59 +1,61 @@
-# pydantic_schemas/artist.py
-
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from models.enums import AlbumArtistRole, SongArtistRole
+from schemas.refs import AlbumRef, SongRef, UserRef
+from pydantic import BaseModel, ConfigDict, Field, AnyHttpUrl
 
-from schemas.album_schema import SongRef   # id, song_name, thumbnail_url
-from schemas.song_schema import AlbumRef   # id, title, cover_url
+
+class ArtistSongLinkOut(BaseModel):
+    id: str
+    song_id: str
+    role: SongArtistRole
+    song: Optional[SongRef] = None
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        use_enum_values=True,
+    )
+
+
+class ArtistAlbumLinkOut(BaseModel):
+    id: str
+    album_id: str
+    role: Optional[AlbumArtistRole] = None
+    album: Optional[AlbumRef] = None
+
+    model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
 
 class ArtistBase(BaseModel):
-    """
-    Campi di dominio di base di un artista.
-    """
-    name: str
-    display_name: Optional[str] = None
-    slug: Optional[str] = None
-    image_url: Optional[str] = None
+    name: str = Field(min_length=1, max_length=255)
+    display_name: Optional[str] = Field(default=None, max_length=120)
+    slug: Optional[str] = Field(default=None, max_length=140)
+    image_url: Optional[AnyHttpUrl] = None
     bio: Optional[str] = None
-    country: Optional[str] = None
+    country: Optional[str] = Field(default=None, max_length=80)
 
 
 class ArtistCreate(ArtistBase):
-    """
-    Payload in input quando crei un artista.
-    Puoi opzionalmente collegare già brani e album.
-    """
-    song_ids: List[str] = Field(default_factory=list)
-    album_ids: List[str] = Field(default_factory=list)
+    pass
 
 
 class ArtistUpdate(BaseModel):
-    """
-    Aggiornamento parziale di un artista.
-    Tutto opzionale.
-    """
-    name: Optional[str] = None
-    display_name: Optional[str] = None
-    slug: Optional[str] = None
-    image_url: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    display_name: Optional[str] = Field(default=None, max_length=120)
+    slug: Optional[str] = Field(default=None, max_length=140)
+    image_url: Optional[AnyHttpUrl] = None
     bio: Optional[str] = None
-    country: Optional[str] = None
-
-    song_ids: Optional[List[str]] = None
-    album_ids: Optional[List[str]] = None
+    country: Optional[str] = Field(default=None, max_length=80)
 
 
 class ArtistOut(ArtistBase):
-    """
-    Rappresentazione pubblica di un artista verso il FE.
-    """
     id: str
-    user_id: Optional[str] = None
+    user: Optional[UserRef] = None
 
-    # liste derivate dalle relazioni Artist.songs e Artist.albums
-    songs: List[SongRef] = Field(default_factory=list)
-    albums: List[AlbumRef] = Field(default_factory=list)
+    song_artist_links: List[ArtistSongLinkOut] = Field(default_factory=list)
+    album_artist_links: List[ArtistAlbumLinkOut] = Field(default_factory=list)
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        use_enum_values=True,
+    )

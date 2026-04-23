@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:client/features/home/song/model/song_model.dart';
+import 'package:client/features/home/song/providers/playback_queue_controller.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -18,6 +19,8 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
 
   bool isPlaying = false;
   bool _listenersAttached = false;
+  bool _handlingTrackCompletion = false;
+  int _playRequestId = 0;
 
   AudioPlayer get audioPlayer => _audioPlayer;
 
@@ -28,11 +31,14 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
   SongModel? build() {
     if (!_listenersAttached) {
       _listenersAttached = true;
-      Future.microtask(_attachPlayerListeners);
+      Future.microtask(() {
+        ref.read(playbackQueueControllerProvider);
+        _attachPlayerListeners();
+      });
     }
 
     ref.onDispose(() async {
-      debugPrint('[CurrentSongNotifier] onDispose – dispose player');
+      debugPrint('[CurrentSongNotifier] onDispose - dispose player');
       await _playerStateSub?.cancel();
       await _playerErrorSub?.cancel();
       await _audioPlayer.dispose();
@@ -54,10 +60,8 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       isPlaying = playing && processing == ProcessingState.ready;
 
       if (processing == ProcessingState.completed) {
-        debugPrint('[CurrentSongNotifier] track completed – resetting');
-        _audioPlayer.seek(Duration.zero);
-        _audioPlayer.pause();
-        isPlaying = false;
+        unawaited(_handleTrackCompleted());
+        return;
       }
 
       final current = state;
@@ -74,16 +78,60 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     });
   }
 
-  Future<void> updateSong(SongModel song) async {
+  bool _isStaleRequest(int requestId) => requestId != _playRequestId;
+
+  Future<void> _handleTrackCompleted() async {
+    if (_handlingTrackCompletion) return;
+    _handlingTrackCompletion = true;
+
+    try {
+      final advanced = await ref
+          .read(playbackQueueControllerProvider.notifier)
+          .handleTrackCompleted();
+
+      if (advanced) return;
+
+      debugPrint('[CurrentSongNotifier] track completed - resetting');
+      await _audioPlayer.seek(Duration.zero);
+      await _audioPlayer.pause();
+      isPlaying = false;
+
+      final current = state;
+      if (current != null) {
+        state = current.copyWith();
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[CurrentSongNotifier] completion handling error: $error\n$stackTrace',
+      );
+    } finally {
+      _handlingTrackCompletion = false;
+    }
+  }
+
+  Future<void> updateSong(
+    SongModel song, {
+    bool syncQueue = true,
+    bool autoplay = true,
+  }) async {
     debugPrint(
-      '[CurrentSongNotifier] updateSong() called for ${song.id} – ${song.songName}',
+      '[CurrentSongNotifier] updateSong() called for ${song.id} - ${song.songName}',
     );
+
+    if (syncQueue) {
+      ref
+          .read(playbackQueueControllerProvider.notifier)
+          .syncSingleSongQueue(song);
+    }
+
+    final requestId = ++_playRequestId;
 
     state = song;
     isPlaying = false;
 
     try {
       await _audioPlayer.stop();
+      if (_isStaleRequest(requestId)) return;
 
       final artistName = song.artists.isNotEmpty
           ? (song.artists.first.artistName ?? 'Unknown artist')
@@ -105,22 +153,30 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
         tag: mediaItem,
       );
 
+      if (_isStaleRequest(requestId)) return;
       debugPrint('[CurrentSongNotifier] setAudioSource -> ${song.songUrl}');
       await _audioPlayer.setAudioSource(audioSource);
       debugPrint('[CurrentSongNotifier] setAudioSource DONE');
+      if (_isStaleRequest(requestId)) return;
 
-      unawaited(_songLocalRepository.saveRecentlyPlayed(song));
+      if (autoplay) {
+        unawaited(_songLocalRepository.saveRecentlyPlayed(song));
+        if (_isStaleRequest(requestId)) return;
+        await _audioPlayer.play();
+        debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
+        if (_isStaleRequest(requestId)) return;
+        isPlaying = true;
+      } else {
+        isPlaying = false;
+      }
 
-      await _audioPlayer.play();
-      debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
-
-      isPlaying = true;
-
+      if (_isStaleRequest(requestId)) return;
       final current = state;
       if (current != null) {
         state = current.copyWith();
       }
     } on PlayerException catch (e, st) {
+      if (_isStaleRequest(requestId)) return;
       debugPrint(
         '[CurrentSongNotifier] PlayerException -> '
         'code=${e.code}, message=${e.message}\n$st',
@@ -132,6 +188,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
         state = current.copyWith();
       }
     } catch (e, st) {
+      if (_isStaleRequest(requestId)) return;
       debugPrint('[CurrentSongNotifier] ERROR in updateSong: $e\n$st');
       isPlaying = false;
 
@@ -162,6 +219,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
 
   Future<void> stopAndClear() async {
     debugPrint('[CurrentSongNotifier] stopAndClear() called');
+    final requestId = ++_playRequestId;
 
     try {
       await _audioPlayer.stop();
@@ -169,6 +227,8 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     } catch (e, st) {
       debugPrint('[CurrentSongNotifier] stopAndClear() ERROR: $e\n$st');
     }
+
+    if (_isStaleRequest(requestId)) return;
 
     isPlaying = false;
     state = null;

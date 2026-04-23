@@ -1,51 +1,51 @@
-from sqlalchemy import TEXT, VARCHAR, Column, LargeBinary, Enum as SAEnum, ForeignKey # Aggiungi ForeignKey
-from sqlalchemy.orm import relationship
-from models.base import Base
-import enum
+import uuid
+from typing import List, Optional
 
-class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    ARTIST = "artist"
-    USER = "user"
+from sqlalchemy import TEXT, VARCHAR, ForeignKey, LargeBinary
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-class User(Base):
+from models.base import Base, TimestampMixin
+from models.enums import UserRole
+
+
+class User(TimestampMixin, Base):
     __tablename__ = "users"
 
-    id = Column(TEXT, primary_key=True)
-    name = Column(VARCHAR(100), nullable=False)
-    email = Column(VARCHAR(100), nullable=False, unique=True, index=True)
-    password = Column(LargeBinary, nullable=False)
-    role = Column(SAEnum(UserRole), default=UserRole.USER, nullable=False)
-    image_url = Column(TEXT, nullable=True)
+    id: Mapped[str] = mapped_column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(VARCHAR(100))
+    email: Mapped[str] = mapped_column(VARCHAR(100), unique=True, index=True)
+    password: Mapped[bytes] = mapped_column(LargeBinary)  # bcrypt hash, 60 bytes
+    role: Mapped[UserRole] = mapped_column(
+        SAEnum(
+            UserRole,
+            name="user_role",
+            values_callable=lambda x: [e.value for e in x],
+            validate_strings=True,
+        ),
+        default=UserRole.USER,
+    )
+    image_url: Mapped[Optional[str]] = mapped_column(TEXT)
 
-    # 1:1 reale lato DB:
-    # - nullable=True perché un utente normale può non avere un profilo artista
-    # - unique=True perché un artista non può essere condiviso da più utenti
-    # - ondelete="SET NULL" per evitare riferimenti rotti se l'artist viene eliminato
-    artist_id = Column(
+    artist_id: Mapped[Optional[str]] = mapped_column(
         TEXT,
         ForeignKey("artists.id", ondelete="SET NULL"),
-        nullable=True,
         unique=True,
         index=True,
     )
 
-    # 2. AGGIORNA LA RELAZIONE
-    # Se il modello Artist ha user_id, usa quello. 
-    # Ma se vuoi collegarli tramite l'artist_id nello User:
-    artist_profile = relationship("Artist", back_populates="user", uselist=False, foreign_keys=[artist_id])
-    
-    # Rimuovi la vecchia @property artist_id perché ora è una colonna vera
-    
-    favorites = relationship(
-        "Favorite",
+    artist_profile: Mapped[Optional["Artist"]] = relationship(
+        back_populates="user",
+        uselist=False,
+        foreign_keys=[artist_id],
+    )
+
+    favorites: Mapped[List["Favorite"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
 
-    favorite_songs = relationship(
-        "Song",
-        secondary="favorites",
-        viewonly=True,
-        overlaps="favorites,song,user",
-    )
+    # favorite_songs rimosso: usa GET /me/favorites con query dedicata nel service
+
+    def __repr__(self) -> str:
+        return f"<User id={self.id!r} email={self.email!r} role={self.role.value!r}>"

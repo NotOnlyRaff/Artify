@@ -1,27 +1,23 @@
-# pydantic_schemas/album_artist.py
+from ArtifyBackend.models.enums import AlbumArtistRole
+from pydantic import BaseModel, ConfigDict, Field
+from schemas.refs import AlbumRef, ArtistRef
 
-from typing import Optional
-
-from pydantic import BaseModel, ConfigDict
-
-from schemas.song_schema import ArtistRef, AlbumRef
-# ArtistRef: id, name, display_name, image_url
-# AlbumRef:  id, title, cover_url
 
 
 class AlbumArtistBase(BaseModel):
     """
-    Base comune per la relazione album–artist.
-    Per ora role rimane una semplice stringa, come nel model SQLAlchemy.
+    Base comune per la relazione album-artist.
     """
-    album_id: str
-    artist_id: str
-    role: Optional[str] = None  # 'primary', 'guest', ecc.
+    album_id: str = Field(min_length=1)
+    artist_id: str = Field(min_length=1)
+    role: AlbumArtistRole = AlbumArtistRole.PRIMARY
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class AlbumArtistCreate(AlbumArtistBase):
     """
-    Payload per creare un nuovo collegamento album–artist.
+    Payload per creare un nuovo collegamento album-artist.
     """
     pass
 
@@ -30,18 +26,24 @@ class AlbumArtistUpdate(BaseModel):
     """
     Aggiorna solo il ruolo dell'artista su un album.
     """
-    role: Optional[str] = None
+    role: AlbumArtistRole
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class AlbumArtistOut(BaseModel):
     """
     Output completo di una riga album_artists.
-    Utile se vuoi endpoint /admin o debug.
     """
     id: str
-    role: Optional[str] = None
+    album_id: str
+    artist_id: str
+    role: AlbumArtistRole
 
     album: AlbumRef
     artist: ArtistRef
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        use_enum_values=True,
+    )

@@ -6,7 +6,7 @@ part of 'album_viewmodel.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$getAllAlbumsHash() => r'821a89e0721124e9d620f4c3fcaae4ea3e5361ad';
+String _$getAllAlbumsHash() => r'9ed596df6707f540f987afa343f98c9293b166b0';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -168,7 +168,7 @@ class _GetAllAlbumsProviderElement
   String? get artistId => (origin as GetAllAlbumsProvider).artistId;
 }
 
-String _$getAlbumHash() => r'90243bca05eee7309f291140c8ab3e089a2c9903';
+String _$getAlbumHash() => r'cd17d3d451759c8835af2f01fa56c26ce59fa24b';
 
 /// ───────────────── PROVIDER: SINGOLO ALBUM ───────────────
 ///
@@ -307,7 +307,7 @@ class _GetAlbumProviderElement
   String get albumId => (origin as GetAlbumProvider).albumId;
 }
 
-String _$albumViewModelHash() => r'0026f054c7f399bf075093f2ca08cf837cd7aae3';
+String _$albumViewModelHash() => r'1cef8fb32be54bfc86176925f51528646546bad6';
 
 /// ───────────────── VIEWMODEL MUTAZIONI ALBUM ─────────────
 ///

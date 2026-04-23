@@ -1,5 +1,5 @@
-import 'package:client/features/home/song/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 
 // SONG
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
@@ -7,6 +7,7 @@ import 'package:client/features/home/song/widget/searchPage/search_explore_secti
 import 'package:client/features/home/song/widget/searchPage/search_field.dart';
 import 'package:client/features/home/song/widget/searchPage/search_header.dart';
 import 'package:client/features/home/song/widget/searchPage/search_results_section.dart';
+import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 
 // ARTIST
 import 'package:client/features/home/artist/model/artist_model.dart';
@@ -88,22 +89,42 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 child: _query.trim().isEmpty
                     ? SearchExploreSection(
                         songs: songs,
-                        onSongTap: (song) {
-                          ref
-                              .read(currentSongNotifierProvider.notifier)
-                              .updateSong(song);
-                        },
+                        onSongTap: (visibleSongs, index) => playSongsFromSource(
+                          ref: ref,
+                          songs: visibleSongs,
+                          startIndex: index,
+                          sourceType: PlaybackSourceType.search,
+                        ),
+                        onSongMoreTap: (visibleSongs, index) =>
+                            showSongPlaybackActionsSheet(
+                          context: context,
+                          ref: ref,
+                          song: visibleSongs[index],
+                          contextSongs: visibleSongs,
+                          startIndex: index,
+                          sourceType: PlaybackSourceType.search,
+                        ),
                       )
                     : SearchResultsSection(
                         songs: songs,
                         artists: artists,
                         albums: albums,
                         query: _query,
-                        onSongTap: (song) {
-                          ref
-                              .read(currentSongNotifierProvider.notifier)
-                              .updateSong(song);
-                        },
+                        onSongTap: (visibleSongs, index) => playSongsFromSource(
+                          ref: ref,
+                          songs: visibleSongs,
+                          startIndex: index,
+                          sourceType: PlaybackSourceType.search,
+                        ),
+                        onSongMoreTap: (visibleSongs, index) =>
+                            showSongPlaybackActionsSheet(
+                          context: context,
+                          ref: ref,
+                          song: visibleSongs[index],
+                          contextSongs: visibleSongs,
+                          startIndex: index,
+                          sourceType: PlaybackSourceType.search,
+                        ),
                       ),
               );
             },

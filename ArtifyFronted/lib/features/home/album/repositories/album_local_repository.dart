@@ -10,37 +10,44 @@ AlbumLocalRepository albumLocalRepository(AlbumLocalRepositoryRef ref) {
 }
 
 class AlbumLocalRepository {
-  // Nome del box su Hive per gli album (simmetrico a 'recent_songs')
   static const String _boxName = 'recent_albums';
 
-  Box<dynamic> get _box => Hive.box(_boxName);
+  // FIX: non accede direttamente a Hive.box() — crasha se la box non è aperta.
+  // Usa isBoxOpen come guard difensivo, speculare a ArtistLocalRepository.
+  bool get _isOpen => Hive.isBoxOpen(_boxName);
 
-  /// Salva/aggiorna un album tra i "recenti"
-  /// chiave = id dell'album
+  Box get _box {
+    if (!_isOpen)
+      throw HiveError('Box $_boxName is not open. Call Hive.openBox first.');
+    return Hive.box(_boxName);
+  }
+
   Future<void> saveRecentlyOpened(AlbumModel album) async {
+    if (!_isOpen) return;
     await _box.put(album.id, album.toJson());
   }
 
-  /// Carica tutti gli album recenti salvati in locale.
-  /// L'ordine attuale è quello con cui Hive restituisce le chiavi:
-  /// se in futuro vuoi ordinarli per data, puoi farlo qui.
   List<AlbumModel> loadRecentlyOpened() {
-    final albums = <AlbumModel>[];
+    if (!_isOpen) return [];
 
+    final albums = <AlbumModel>[];
     for (final key in _box.keys) {
       final raw = _box.get(key);
       if (raw != null) {
-        albums.add(AlbumModel.fromJson(
-          Map<String, dynamic>.from(raw as Map),
-        ));
+        try {
+          albums
+              .add(AlbumModel.fromJson(Map<String, dynamic>.from(raw as Map)));
+        } catch (_) {
+          // Entry corrotta — la saltiamo silenziosamente.
+        }
       }
     }
-
-    return albums;
+    // Ordine inverso = più recente prima (speculare a ArtistLocalRepository).
+    return albums.reversed.toList();
   }
 
-  /// (Opzionale ma utile) – pulisce il box degli album recenti.
   Future<void> clearAll() async {
+    if (!_isOpen) return;
     await _box.clear();
   }
 }

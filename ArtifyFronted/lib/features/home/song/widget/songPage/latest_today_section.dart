@@ -1,9 +1,10 @@
 // lib/features/home/song/view/widgets/latest_today_section.dart
 
 import 'package:client/core/widgets/loader.dart';
-import 'package:client/features/home/song/providers/current_song_notifier.dart';
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
+import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/features/home/song/widget/songPage/song_artist_formatter.dart';
 import 'package:flutter/material.dart';
@@ -59,9 +60,20 @@ class LatestTodaySection extends ConsumerWidget {
         final song = songs[index];
 
         return GestureDetector(
-          onTap: () {
-            ref.read(currentSongNotifierProvider.notifier).updateSong(song);
-          },
+          onTap: () => playSongsFromSource(
+            ref: ref,
+            songs: songs,
+            startIndex: index,
+            sourceType: PlaybackSourceType.latest,
+          ),
+          onLongPress: () => showSongPlaybackActionsSheet(
+            context: context,
+            ref: ref,
+            song: song,
+            contextSongs: songs,
+            startIndex: index,
+            sourceType: PlaybackSourceType.latest,
+          ),
           child: Padding(
             padding: EdgeInsets.only(right: index == songs.length - 1 ? 0 : 16),
             child: Column(

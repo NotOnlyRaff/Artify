@@ -5,11 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 class SearchSongTile extends StatelessWidget {
   final SongModel song;
   final VoidCallback? onTap;
+  final VoidCallback? onMoreTap;
 
   const SearchSongTile({
     super.key,
     required this.song,
     this.onTap,
+    this.onMoreTap,
   });
 
   @override
@@ -84,9 +86,7 @@ class SearchSongTile extends StatelessWidget {
             color: Colors.white60,
             size: 20,
           ),
-          onPressed: () {
-            // bottom sheet in futuro: play, add to playlist, ecc.
-          },
+          onPressed: onMoreTap,
         ),
         onTap: onTap,
       ),

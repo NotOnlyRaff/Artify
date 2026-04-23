@@ -5,12 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 
 class SearchExploreSection extends StatelessWidget {
   final List<SongModel> songs;
-  final Function(SongModel) onSongTap;
+  final Future<void> Function(List<SongModel> songs, int index) onSongTap;
+  final Future<void> Function(List<SongModel> songs, int index) onSongMoreTap;
 
   const SearchExploreSection({
     super.key,
     required this.songs,
     required this.onSongTap,
+    required this.onSongMoreTap,
   });
 
   @override
@@ -36,6 +38,7 @@ class SearchExploreSection extends StatelessWidget {
       ('Fresh uploads', 'Your latest additions'),
       ('Feel good', 'Warm, bright, uplifting energy'),
     ];
+    final visibleSongs = songs.take(10).toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
@@ -119,14 +122,13 @@ class SearchExploreSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        ...songs.take(10).map(
-              (s) => Padding(
+        ...visibleSongs.asMap().entries.map(
+              (entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: SearchSongTile(
-                  song: s,
-                  onTap: () {
-                    onSongTap(s);
-                  },
+                  song: entry.value,
+                  onTap: () => onSongTap(visibleSongs, entry.key),
+                  onMoreTap: () => onSongMoreTap(visibleSongs, entry.key),
                 ),
               ),
             ),

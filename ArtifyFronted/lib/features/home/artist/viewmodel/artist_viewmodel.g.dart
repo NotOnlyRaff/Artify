@@ -6,7 +6,7 @@ part of 'artist_viewmodel.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$getArtistsHash() => r'8a830f2b47ca65c51a8bae9666c2fadb1de0f546';
+String _$getArtistsHash() => r'8e604e6c477046ed4abc97d5c6a4be31baf3b31d';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -189,7 +189,7 @@ class _GetArtistsProviderElement
   String? get albumId => (origin as GetArtistsProvider).albumId;
 }
 
-String _$getArtistHash() => r'335f1e7cb86f383395edddaa90f089812e0cfba6';
+String _$getArtistHash() => r'94ca12bd4ea7fd53e41941438aa137faf1a5347a';
 
 /// See also [getArtist].
 @ProviderFor(getArtist)
@@ -316,7 +316,7 @@ class _GetArtistProviderElement
   String get artistId => (origin as GetArtistProvider).artistId;
 }
 
-String _$artistViewModelHash() => r'1e9c81d135e420aa063c3aa453a5e2e47277d21b';
+String _$artistViewModelHash() => r'ac650c6b1d42a1a9b7a810ad5b112638aaf912bf';
 
 /// See also [ArtistViewModel].
 @ProviderFor(ArtistViewModel)

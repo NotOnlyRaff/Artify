@@ -119,8 +119,9 @@ class _DeleteArtistPageState extends ConsumerState<DeleteArtistPage> {
       if (next == null) return;
       next.when(
         data: (data) {
-          if (data is bool && data == true)
+          if (data is bool && data == true) {
             showSnackBar(context, 'Artist deleted successfully.');
+          }
         },
         error: (error, _) => showSnackBar(context, error.toString()),
         loading: () {},

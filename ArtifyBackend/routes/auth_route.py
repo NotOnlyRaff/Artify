@@ -1,103 +1,127 @@
-import mimetypes
-import cloudinary
 import cloudinary.uploader
-from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from database import get_db
 from middleware.auth_middleware import auth_middleware, require_role
-from models.user import User, UserRole
-from schemas.user_schema import UserCreate, UserLogin, UserOut, UserPasswordChange, UserUpdate # Aggiunto UserUpdate
+from models.enums import UserRole           # FIX: da enums.py
+from models.user import User
+from schemas.user_schema import (
+    UserCreate, UserLogin, UserOut, UserPasswordChange, UserUpdate,
+)
 from services.auth_service import Auth
-from pydantic import BaseModel
 
 router = APIRouter(tags=["auth"])
+
 
 class AuthResponse(BaseModel):
     token: str
     user: UserOut
 
-# ---------- AUTH STANDARD ----------
+
+# ------------------------------------------------------------------ #
+#  Auth standard                                                      #
+# ------------------------------------------------------------------ #
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=UserOut)
 def signup_user(user: UserCreate, db: Session = Depends(get_db)):
     return Auth.signup(db, user)
 
+
 @router.post("/login", response_model=AuthResponse)
 def login_user(user: UserLogin, db: Session = Depends(get_db)):
     return Auth.login(db, user)
 
+
 @router.get("/", response_model=UserOut)
-def current_user_data(db: Session = Depends(get_db), user_dict: dict = Depends(auth_middleware)):
+def current_user_data(
+    db: Session = Depends(get_db),
+    user_dict: dict = Depends(auth_middleware),
+):
     return Auth.get_current_user(db, user_dict["uid"])
 
 
-# ---------- GESTIONE PROFILO (NUOVO) ----------
+# ------------------------------------------------------------------ #
+#  Gestione profilo                                                   #
+# ------------------------------------------------------------------ #
 
 @router.post("/upload-profile-picture", response_model=UserOut)
 async def upload_profile_pic(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user_dict: dict = Depends(auth_middleware)
+    user_dict: dict = Depends(auth_middleware),
 ):
-    """
-    Carica la foto profilo su Cloudinary e restituisce l'URL.
-    """
-    # 1. Validazione tipo file
     content_type = file.content_type
     if not (content_type and content_type.startswith("image/")):
-        raise HTTPException(status_code=400, detail="Il file deve essere un'immagine.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image",
+        )
 
     try:
         upload_res = cloudinary.uploader.upload(
             file.file,
             folder=f"artify/users/profiles/{user_dict['uid']}",
             overwrite=True,
-            resource_type="image"
+            resource_type="image",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image upload failed: {str(e)}",
         )
 
-        image_url = upload_res["secure_url"]
+    image_url = upload_res.get("secure_url")
+    if not image_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Upload succeeded but no secure_url returned",
+        )
 
-        user = db.query(User).filter(User.id == user_dict["uid"]).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # FIX: aggiorna image_url via service invece di scrivere direttamente nel DB.
+    # FIX: requester_id == target_user_id — l'utente aggiorna se stesso.
+    return Auth.update_user_profile(
+        db=db,
+        requester_id=user_dict["uid"],
+        target_user_id=user_dict["uid"],
+        update_data=UserUpdate(image_url=image_url),
+    )
 
-        user.image_url = image_url
-        db.commit()
-        db.refresh(user)
-
-        return user
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/update-profile", response_model=UserOut)
 def update_profile(
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    user_dict: dict = Depends(auth_middleware)
+    user_dict: dict = Depends(auth_middleware),
 ):
-    """
-    Aggiorna i metadati dell'utente (nome, email, profile_pic_url).
-    """
-    return Auth.update_user_profile(db, user_id=user_dict["uid"], update_data=payload)
+    # FIX: aggiunta firma corretta con requester_id e target_user_id.
+    # Il vecchio codice passava user_id= come kwarg sbagliato.
+    return Auth.update_user_profile(
+        db=db,
+        requester_id=user_dict["uid"],
+        target_user_id=user_dict["uid"],
+        update_data=payload,
+    )
 
 
-# ---------- ADMIN AREA ----------
+# ------------------------------------------------------------------ #
+#  Admin area                                                         #
+# ------------------------------------------------------------------ #
 
 @router.get("/all", response_model=list[UserOut])
 def get_all_users(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_role([UserRole.ADMIN]))
+    # FIX: aggiunto limit/offset per evitare di caricare tutto il DB.
+    limit: int = 20,
+    offset: int = 0,
+    current_admin: User = Depends(require_role([UserRole.ADMIN])),
 ):
-    """
-    Lista di tutti gli utenti. Solo per Admin.
-    """
-    return db.query(User).options(
-        joinedload(User.favorite_songs),
-        joinedload(User.artist_profile)
-    ).all()
+    # FIX: rimosso joinedload(User.favorite_songs) — relazione eliminata dal model.
+    total = db.query(User).count()
+    users = db.query(User).offset(offset).limit(limit).all()
+    return users
+
 
 @router.delete("/delete/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
@@ -105,15 +129,12 @@ def delete_user(
     db: Session = Depends(get_db),
     user_dict: dict = Depends(auth_middleware),
 ):
-    """
-    Elimina un utente se il requester è admin oppure è lo stesso utente.
-    """
     Auth.delete_user(
         db=db,
         requester_id=user_dict["uid"],
         target_user_id=user_id,
     )
-    return
+
 
 @router.patch("/change-password/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(
@@ -122,14 +143,9 @@ def change_password(
     db: Session = Depends(get_db),
     user_dict: dict = Depends(auth_middleware),
 ):
-    """
-    Cambia la password di un utente se il requester è admin
-    oppure è lo stesso utente.
-    """
     Auth.change_user_password(
         db=db,
         requester_id=user_dict["uid"],
         target_user_id=user_id,
         payload=payload,
     )
-    return

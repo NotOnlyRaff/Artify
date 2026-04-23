@@ -9,13 +9,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'artist_viewmodel.g.dart';
 
-Future<String> _readStoredToken() async {
-  final token = await AuthLocalRepository().getToken();
-  if (token == null || token.isEmpty) {
-    throw Exception('User not authenticated');
-  }
-  return token;
-}
+// ------------------------------------------------------------------ //
+//  Provider di lettura (FutureProvider)                              //
+// ------------------------------------------------------------------ //
 
 @riverpod
 Future<List<ArtistModel>> getArtists(
@@ -24,9 +20,11 @@ Future<List<ArtistModel>> getArtists(
   String? songId,
   String? albumId,
 }) async {
-  final token = await _readStoredToken();
-  final repo = ref.watch(artistRemoteRepositoryProvider);
+  // FIX: usa il provider Riverpod invece di AuthLocalRepository() diretto.
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
 
+  final repo = ref.watch(artistRemoteRepositoryProvider);
   final res = await repo.listArtists(
     token: token,
     query: search,
@@ -41,17 +39,13 @@ Future<List<ArtistModel>> getArtists(
 }
 
 @riverpod
-Future<ArtistModel> getArtist(
-  GetArtistRef ref,
-  String artistId,
-) async {
-  final token = await _readStoredToken();
-  final repo = ref.watch(artistRemoteRepositoryProvider);
+Future<ArtistModel> getArtist(GetArtistRef ref, String artistId) async {
+  // FIX: usa il provider Riverpod.
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
 
-  final res = await repo.getArtist(
-    artistId: artistId,
-    token: token,
-  );
+  final repo = ref.watch(artistRemoteRepositoryProvider);
+  final res = await repo.getArtist(artistId: artistId, token: token);
 
   return switch (res) {
     Left(value: final l) => throw l.message,
@@ -59,20 +53,9 @@ Future<ArtistModel> getArtist(
   };
 }
 
-Future<ArtistModel> fetchArtistById(GetArtistRef ref, String artistId) async {
-  final token = await _readStoredToken();
-  final repo = ref.watch(artistRemoteRepositoryProvider);
-
-  final res = await repo.fetchArtistById(
-    artistId: artistId,
-    token: token,
-  );
-
-  return switch (res) {
-    Left(value: final l) => throw l.message,
-    Right(value: final r) => r,
-  };
-}
+// ------------------------------------------------------------------ //
+//  ViewModel con stato                                               //
+// ------------------------------------------------------------------ //
 
 @riverpod
 class ArtistViewModel extends _$ArtistViewModel {
@@ -82,25 +65,30 @@ class ArtistViewModel extends _$ArtistViewModel {
   ArtistLocalRepository get _localRepo =>
       ref.read(artistLocalRepositoryProvider);
 
-  AuthLocalRepository get _authLocalRepository => AuthLocalRepository();
+  // FIX: usa il provider invece di AuthLocalRepository() diretto.
+  // Il vecchio codice creava una nuova istanza ad ogni chiamata, bypassando
+  // flutter_secure_storage configurato nel provider.
+  AuthLocalRepository get _authLocalRepo =>
+      ref.read(authLocalRepositoryProvider);
 
   @override
-  AsyncValue? build() {
-    return null;
-  }
+  AsyncValue? build() => null;
 
   Future<String> _requireToken({String? overrideToken}) async {
     if (overrideToken != null && overrideToken.trim().isNotEmpty) {
       return overrideToken.trim();
     }
-
-    final token = await _authLocalRepository.getToken();
+    // FIX: legge dal provider, non da AuthLocalRepository() istanziato.
+    final token = await _authLocalRepo.getToken();
     if (token == null || token.isEmpty) {
       throw Exception('User not authenticated');
     }
-
     return token;
   }
+
+  // ------------------------------------------------------------------ //
+  //  Upload immagine                                                    //
+  // ------------------------------------------------------------------ //
 
   Future<Either<AppFailure, String>> uploadArtistImage({
     required PickedMedia image,
@@ -108,11 +96,8 @@ class ArtistViewModel extends _$ArtistViewModel {
   }) async {
     try {
       final resolvedToken = await _requireToken(overrideToken: token);
-
       return await _remoteRepo.uploadArtistImage(
-        image: image,
-        token: resolvedToken,
-      );
+          image: image, token: resolvedToken);
     } catch (e) {
       return Left(AppFailure(e.toString()));
     }
@@ -121,36 +106,12 @@ class ArtistViewModel extends _$ArtistViewModel {
   Future<Either<AppFailure, String>> uploadArtistImageWithToken({
     required PickedMedia image,
     required String token,
-  }) {
-    return uploadArtistImage(
-      image: image,
-      token: token,
-    );
-  }
+  }) =>
+      uploadArtistImage(image: image, token: token);
 
-  Future<void> createArtist({
-    required String name,
-    String? displayName,
-    String? slug,
-    String? imageUrl,
-    String? bio,
-    String? country,
-    List<String> songIds = const [],
-    List<String> albumIds = const [],
-    String? token,
-  }) async {
-    await createArtistResult(
-      name: name,
-      displayName: displayName,
-      slug: slug,
-      imageUrl: imageUrl,
-      bio: bio,
-      country: country,
-      songIds: songIds,
-      albumIds: albumIds,
-      token: token,
-    );
-  }
+  // ------------------------------------------------------------------ //
+  //  Creazione artista                                                  //
+  // ------------------------------------------------------------------ //
 
   Future<Either<AppFailure, ArtistModel>> createArtistResult({
     required String name,
@@ -167,7 +128,6 @@ class ArtistViewModel extends _$ArtistViewModel {
 
     try {
       final resolvedToken = await _requireToken(overrideToken: token);
-
       final res = await _remoteRepo.createArtist(
         name: name,
         displayName: displayName,
@@ -188,11 +148,9 @@ class ArtistViewModel extends _$ArtistViewModel {
         case Right(value: final artist):
           ref.invalidate(getArtistsProvider);
           ref.invalidate(getArtistProvider(artist.id));
-
           try {
             await _localRepo.saveRecentlyOpened(artist);
           } catch (_) {}
-
           state = AsyncValue.data(artist);
           return Right(artist);
       }
@@ -202,6 +160,34 @@ class ArtistViewModel extends _$ArtistViewModel {
       return Left(failure);
     }
   }
+
+  // createArtist senza return — delegato a createArtistResult.
+  Future<void> createArtist({
+    required String name,
+    String? displayName,
+    String? slug,
+    String? imageUrl,
+    String? bio,
+    String? country,
+    List<String> songIds = const [],
+    List<String> albumIds = const [],
+    String? token,
+  }) =>
+      createArtistResult(
+        name: name,
+        displayName: displayName,
+        slug: slug,
+        imageUrl: imageUrl,
+        bio: bio,
+        country: country,
+        songIds: songIds,
+        albumIds: albumIds,
+        token: token,
+      );
+
+  // ------------------------------------------------------------------ //
+  //  Aggiornamento artista                                              //
+  // ------------------------------------------------------------------ //
 
   Future<void> updateArtist({
     required String artistId,
@@ -219,7 +205,6 @@ class ArtistViewModel extends _$ArtistViewModel {
 
     try {
       final resolvedToken = await _requireToken(overrideToken: token);
-
       final res = await _remoteRepo.updateArtist(
         artistId: artistId,
         name: name,
@@ -241,10 +226,8 @@ class ArtistViewModel extends _$ArtistViewModel {
           try {
             await _localRepo.saveRecentlyOpened(artist);
           } catch (_) {}
-
           ref.invalidate(getArtistsProvider);
           ref.invalidate(getArtistProvider(artistId));
-
           state = AsyncValue.data(artist);
       }
     } catch (e) {
@@ -252,19 +235,17 @@ class ArtistViewModel extends _$ArtistViewModel {
     }
   }
 
-  Future<void> deleteArtist({
-    required String artistId,
-    String? token,
-  }) async {
+  // ------------------------------------------------------------------ //
+  //  Eliminazione artista                                               //
+  // ------------------------------------------------------------------ //
+
+  Future<void> deleteArtist({required String artistId, String? token}) async {
     state = const AsyncValue.loading();
 
     try {
       final resolvedToken = await _requireToken(overrideToken: token);
-
       final res = await _remoteRepo.deleteArtist(
-        artistId: artistId,
-        token: resolvedToken,
-      );
+          artistId: artistId, token: resolvedToken);
 
       switch (res) {
         case Left(value: final failure):
@@ -275,11 +256,9 @@ class ArtistViewModel extends _$ArtistViewModel {
             try {
               await _localRepo.removeFromRecentlyOpened(artistId);
             } catch (_) {}
-
             ref.invalidate(getArtistsProvider);
             ref.invalidate(getArtistProvider(artistId));
           }
-
           state = AsyncValue.data(ok);
       }
     } catch (e) {
@@ -287,11 +266,13 @@ class ArtistViewModel extends _$ArtistViewModel {
     }
   }
 
-  List<ArtistModel> getRecentlyOpenedArtists() {
-    return _localRepo.loadRecentlyOpened();
-  }
+  // ------------------------------------------------------------------ //
+  //  Recenti locali                                                     //
+  // ------------------------------------------------------------------ //
 
-  Future<void> markArtistOpened(ArtistModel artist) async {
-    await _localRepo.saveRecentlyOpened(artist);
-  }
+  List<ArtistModel> getRecentlyOpenedArtists() =>
+      _localRepo.loadRecentlyOpened();
+
+  Future<void> markArtistOpened(ArtistModel artist) =>
+      _localRepo.saveRecentlyOpened(artist);
 }

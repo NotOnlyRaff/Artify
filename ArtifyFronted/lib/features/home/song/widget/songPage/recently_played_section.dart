@@ -1,8 +1,9 @@
 // lib/features/home/song/view/widgets/recently_played_section.dart
 
-import 'package:client/features/home/song/providers/current_song_notifier.dart';
 import 'package:client/core/theme/app_pallete.dart';
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/model/song_model.dart';
+import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 import 'package:client/features/home/song/widget/songPage/song_artist_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,9 +34,20 @@ class RecentlyPlayedSection extends ConsumerWidget {
           final song = songs[index];
 
           return GestureDetector(
-            onTap: () {
-              ref.read(currentSongNotifierProvider.notifier).updateSong(song);
-            },
+            onTap: () => playSongsFromSource(
+              ref: ref,
+              songs: songs,
+              startIndex: index,
+              sourceType: PlaybackSourceType.recent,
+            ),
+            onLongPress: () => showSongPlaybackActionsSheet(
+              context: context,
+              ref: ref,
+              song: song,
+              contextSongs: songs,
+              startIndex: index,
+              sourceType: PlaybackSourceType.recent,
+            ),
             child: Container(
               width: 250,
               decoration: BoxDecoration(

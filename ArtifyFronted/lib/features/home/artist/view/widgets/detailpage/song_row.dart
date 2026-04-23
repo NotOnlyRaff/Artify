@@ -1,5 +1,5 @@
 import 'package:client/features/home/song/model/song_model.dart';
-import 'package:client/features/home/song/providers/current_song_notifier.dart';
+import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -29,9 +29,7 @@ class SongRow extends ConsumerWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: () {
-        ref.read(currentSongNotifierProvider.notifier).updateSong(song);
-      },
+      onTap: () => playSingleSongNow(ref: ref, song: song),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(

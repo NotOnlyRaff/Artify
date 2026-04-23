@@ -55,8 +55,9 @@ class _UploadArtistPageState extends ConsumerState<UploadArtistPage> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-    if (_nameController.text.trim().isEmpty)
+    if (_nameController.text.trim().isEmpty) {
       return showSnackBar(context, 'Name is required.');
+    }
 
     String? imageUrl;
     if (selectedImage != null) {
@@ -64,8 +65,9 @@ class _UploadArtistPageState extends ConsumerState<UploadArtistPage> {
           .read(artistViewModelProvider.notifier)
           .uploadArtistImage(image: selectedImage!);
       if (!mounted) return;
-      if (res is Left)
+      if (res is Left) {
         return showSnackBar(context, (res as Left).value.message);
+      }
       imageUrl = (res as Right).value;
     }
 

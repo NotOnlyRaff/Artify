@@ -1,21 +1,14 @@
-// lib/features/home/song/model/song_model.dart
-
-// ❌ RIMUOVI questo import se c'è
-// import 'package:client/features/home/artist/model/artist_model.dart';
+// lib/features/home/song/model/song_artist_model.dart
 
 enum SongArtistRole {
   primary,
   featured,
   producer,
   mixer,
-  writer,
-}
+  writer;
 
-extension SongArtistRoleX on SongArtistRole {
-  static SongArtistRole fromString(String value) {
-    switch (value) {
-      case 'primary':
-        return SongArtistRole.primary;
+  static SongArtistRole fromString(String? value) {
+    switch (value?.toLowerCase()) {
       case 'featured':
         return SongArtistRole.featured;
       case 'producer':
@@ -24,110 +17,126 @@ extension SongArtistRoleX on SongArtistRole {
         return SongArtistRole.mixer;
       case 'writer':
         return SongArtistRole.writer;
+      case 'primary':
       default:
         return SongArtistRole.primary;
     }
   }
 
-  String get value {
-    switch (this) {
-      case SongArtistRole.primary:
-        return 'primary';
-      case SongArtistRole.featured:
-        return 'featured';
-      case SongArtistRole.producer:
-        return 'producer';
-      case SongArtistRole.mixer:
-        return 'mixer';
-      case SongArtistRole.writer:
-        return 'writer';
-    }
-  }
+  String get value => name;
 }
 
-/// Modello "join" song–artist.
-/// Può essere creato sia da:
-/// - SongArtistOut (con nested song / artist)
-/// - SongRef semplice (id, song_name, thumbnail_url) usato in ArtistOut.songs
+/// Modello per una riga song–artist con ruolo.
+/// Corrisponde a SongArtistOut del backend.
+///
+/// MODIFICHE rispetto alla versione precedente:
+/// - Aggiunto [linkId]: l'id della riga song_artists, necessario per
+///   UPDATE e DELETE tramite /song-artists/{link_id}.
+/// - [artistId] non usa più ! (null assertion) — gestisce il caso null in modo sicuro.
 class SongArtistModel {
+  /// Id della riga song_artists — necessario per update/delete del link.
+  final String? linkId;
 
-  /// ruolo (primary, featured, ecc.)
   final SongArtistRole role;
 
-  /// Info SONG (possono arrivare da `song` nested o direttamente)
+  // Info SONG
   final String? songId;
   final String? songName;
   final String? thumbnailUrl;
 
-  /// Info ARTIST (se presenti nella risposta)
-  final String artistId;
+  // Info ARTIST
+  final String? artistId;
   final String? artistName;
   final String? artistImageUrl;
 
   const SongArtistModel({
+    this.linkId,
     required this.role,
     this.songId,
     this.songName,
     this.thumbnailUrl,
-    required this.artistId,
+    this.artistId,
     this.artistName,
     this.artistImageUrl,
   });
 
   factory SongArtistModel.fromMap(Map<String, dynamic> map) {
-    // ruolo
-    final roleRaw = map['role']?.toString() ?? 'primary';
-    final role = SongArtistRoleX.fromString(roleRaw);
+    final role = SongArtistRole.fromString(map['role']?.toString());
 
-    // ------ SONG DATA ------
-    String? songId =
-        map['song_id']?.toString() ?? map['id']?.toString(); // fallback id
+    // Song data (da nested 'song' o campi flat)
+    String? songId = map['song_id']?.toString();
     String? songName = map['song_name']?.toString();
-    String? thumb = map['thumbnail_url']?.toString();
+    String? thumbnailUrl = map['thumbnail_url']?.toString();
 
-    // se esiste nested "song"
-    final songRaw = map['song'];
-    if (songRaw is Map) {
-      final s = Map<String, dynamic>.from(songRaw);
+    final rawSong = map['song'];
+    if (rawSong is Map) {
+      final s = Map<String, dynamic>.from(rawSong);
       songId = s['id']?.toString() ?? songId;
       songName = s['song_name']?.toString() ?? songName;
-      thumb = s['thumbnail_url']?.toString() ?? thumb;
+      thumbnailUrl = s['thumbnail_url']?.toString() ?? thumbnailUrl;
     }
 
-    // ------ ARTIST DATA ------
+    // Artist data (da nested 'artist' o campi flat)
     String? artistId = map['artist_id']?.toString();
     String? artistName = map['artist_name']?.toString();
-    String? artistImageUrl;
+    String? artistImageUrl = map['artist_image_url']?.toString();
 
-    final artistRaw = map['artist'];
-    if (artistRaw is Map) {
-      final a = Map<String, dynamic>.from(artistRaw);
+    final rawArtist = map['artist'];
+    if (rawArtist is Map) {
+      final a = Map<String, dynamic>.from(rawArtist);
       artistId = a['id']?.toString() ?? artistId;
       artistName = a['name']?.toString() ?? artistName;
-      artistImageUrl = a['image_url']?.toString();
+      artistImageUrl = a['image_url']?.toString() ?? artistImageUrl;
     }
 
-
     return SongArtistModel(
+      linkId: map['id']?.toString(),
       role: role,
       songId: songId,
       songName: songName,
-      thumbnailUrl: thumb,
-      artistId: artistId!,
+      thumbnailUrl: thumbnailUrl,
+      artistId: artistId,
       artistName: artistName,
       artistImageUrl: artistImageUrl,
     );
   }
 
+  SongArtistModel copyWith({
+    String? linkId,
+    SongArtistRole? role,
+    String? songId,
+    String? songName,
+    String? thumbnailUrl,
+    String? artistId,
+    String? artistName,
+    String? artistImageUrl,
+  }) {
+    return SongArtistModel(
+      linkId: linkId ?? this.linkId,
+      role: role ?? this.role,
+      songId: songId ?? this.songId,
+      songName: songName ?? this.songName,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      artistId: artistId ?? this.artistId,
+      artistName: artistName ?? this.artistName,
+      artistImageUrl: artistImageUrl ?? this.artistImageUrl,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
+      if (linkId != null) 'id': linkId,
       'role': role.value,
-      'song_id': songId,
-      'song_name': songName,
-      'thumbnail_url': thumbnailUrl,
-      'artist_id': artistId,
-      'artist_name': artistName,
-      'artist_image_url': artistImageUrl,
+      if (songId != null) 'song_id': songId,
+      if (songName != null) 'song_name': songName,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (artistId != null) 'artist_id': artistId,
+      if (artistName != null) 'artist_name': artistName,
+      if (artistImageUrl != null) 'artist_image_url': artistImageUrl,
     };
   }
+
+  @override
+  String toString() =>
+      'SongArtistModel(linkId: $linkId, role: ${role.value}, artistId: $artistId, artistName: $artistName)';
 }

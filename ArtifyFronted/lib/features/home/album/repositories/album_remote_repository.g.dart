@@ -7,7 +7,7 @@ part of 'album_remote_repository.dart';
 // **************************************************************************
 
 String _$albumRemoteRepositoryHash() =>
-    r'eb6752f9c166221f37d6e56999e21d4c22d20823';
+    r'd80e18ac1148a46d834af5acf538525c7457ed3f';
 
 /// See also [albumRemoteRepository].
 @ProviderFor(albumRemoteRepository)

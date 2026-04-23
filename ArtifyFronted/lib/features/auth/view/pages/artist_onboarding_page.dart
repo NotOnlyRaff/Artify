@@ -129,7 +129,13 @@ class _ArtistOnboardingPageState extends ConsumerState<ArtistOnboardingPage> {
       _isSubmitting = true;
     });
 
+    // Teniamo traccia dell'utente creato e del token per poter fare rollback
+    // se qualsiasi step successivo alla signup fallisce.
+    String? createdUserId;
+    String? sessionToken;
+
     try {
+      // STEP 1 — Crea l'account utente con ruolo ARTIST.
       final signupRes = await authVm.signUpUser(
         name: widget.accountName,
         email: widget.email,
@@ -141,12 +147,15 @@ class _ArtistOnboardingPageState extends ConsumerState<ArtistOnboardingPage> {
 
       switch (signupRes) {
         case Left(value: final failure):
+          // Signup fallita: nessun utente creato, nessun rollback necessario.
           showSnackBar(context, failure.message);
           return;
-        case Right():
-          break;
+        case Right(value: final createdUser):
+          createdUserId = createdUser.id;
       }
 
+      // STEP 2 — Login temporaneo per ottenere il token di onboarding.
+      // Il token NON viene salvato in storage: l'utente non risulta loggato.
       final loginRes = await authVm.loginForArtistOnboarding(
         email: widget.email,
         password: widget.password,
@@ -154,35 +163,50 @@ class _ArtistOnboardingPageState extends ConsumerState<ArtistOnboardingPage> {
 
       if (!mounted) return;
 
-      late final String token;
       switch (loginRes) {
         case Left(value: final failure):
-          showSnackBar(context, failure.message);
+          // Login fallito dopo signup: rollback dell'utente.
+          await authVm.rollbackUserCreation(
+            userId: createdUserId,
+            token: '', // impossibile ottenere il token — rollback best-effort
+          );
+          if (!mounted) return;
+          showSnackBar(context, 'Registration failed: ${failure.message}');
           return;
         case Right(value: final t):
-          token = t;
+          sessionToken = t;
       }
 
+      // Da qui in poi, qualsiasi fallimento richiede rollback dell'utente.
+
+      // STEP 3 — Upload immagine artista (opzionale).
       String? imageUrl;
       if (selectedImage != null) {
         final imageRes = await artistVm.uploadArtistImageWithToken(
           image: selectedImage!,
-          token: token,
+          token: sessionToken,
         );
 
         if (!mounted) return;
 
         switch (imageRes) {
           case Left(value: final failure):
-            showSnackBar(context, failure.message);
+            // Upload fallito: rollback utente e stop.
+            await authVm.rollbackUserCreation(
+              userId: createdUserId,
+              token: sessionToken,
+            );
+            if (!mounted) return;
+            showSnackBar(context, 'Image upload failed: ${failure.message}');
             return;
           case Right(value: final uploadedUrl):
             imageUrl = uploadedUrl;
         }
       }
 
+      // STEP 4 — Crea il profilo artista nel DB.
       final createRes = await artistVm.createArtistResult(
-        token: token,
+        token: sessionToken,
         name: artistName,
         displayName: displayName.isEmpty ? null : displayName,
         slug: finalSlug.isEmpty ? null : finalSlug,
@@ -195,12 +219,20 @@ class _ArtistOnboardingPageState extends ConsumerState<ArtistOnboardingPage> {
 
       switch (createRes) {
         case Left(value: final failure):
-          showSnackBar(context, failure.message);
+          // Creazione artista fallita: rollback utente. È il caso più comune
+          // (slug duplicato, errore di rete, validazione backend).
+          await authVm.rollbackUserCreation(
+            userId: createdUserId,
+            token: sessionToken,
+          );
+          if (!mounted) return;
+          showSnackBar(context, 'Artist creation failed: ${failure.message}');
           return;
         case Right():
           break;
       }
 
+      // Tutto ok: signup + artista creati con successo.
       if (!mounted) return;
 
       showSnackBar(

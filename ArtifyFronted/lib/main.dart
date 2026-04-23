@@ -23,6 +23,12 @@ void main() async {
 
   await Hive.initFlutter();
   await Hive.openBox('recent_songs');
+  // FIX: aggiunta apertura box 'recent_artists' — usata da ArtistLocalRepository.
+  // Senza questa riga, la prima chiamata a markArtistOpened() o
+  // getRecentlyOpenedArtists() lancia HiveError("Box not open").
+  await Hive.openBox('recent_artists');
+  await Hive.openBox('recent_albums');
+  await Hive.openBox('playback_queue');
 
   runApp(
     const ProviderScope(
@@ -38,10 +44,10 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
 
-    Image.asset(
-      'assets/images/app_icon.png',
-      height: 100,
-    );
+    // FIX: rimosso Image.asset('assets/images/app_icon.png') che era un
+    // side-effect nel build — creava un widget mai inserito nel tree.
+    // Se l'intento era precaricare l'immagine, usa precacheImage in didChangeDependencies.
+
     return MaterialApp(
       title: 'Artify',
       theme: AppTheme.darkThemeMode,

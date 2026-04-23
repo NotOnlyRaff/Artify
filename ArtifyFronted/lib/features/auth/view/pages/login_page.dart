@@ -1,4 +1,3 @@
-// lib/features/auth/view/pages/login_page.dart
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/core/widgets/loader.dart';
@@ -40,14 +39,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     ref.listen(authViewModelProvider, (_, next) {
       next.whenOrNull(
-        data: (_) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const HomePage(),
-            ),
-            (_) => false,
-          );
+        // FIX: aggiunto `data != null` — senza questo controllo il listener
+        // navigava a HomePage anche quando il provider restituiva null
+        // (stato iniziale al boot o dopo logout), portando l'utente non
+        // autenticato direttamente alla home.
+        data: (data) {
+          if (data != null) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const HomePage()),
+              (_) => false,
+            );
+          }
         },
         error: (error, _) {
           showSnackBar(context, error.toString());
@@ -106,9 +109,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         color: Pallete.surfacePrimary.withOpacity(0.72),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
             color: Pallete.primary.withOpacity(0.18),
@@ -148,11 +149,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   color: Colors.white70,
                   size: 20,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _passwordVisible = !_passwordVisible;
-                  });
-                },
+                onPressed: () =>
+                    setState(() => _passwordVisible = !_passwordVisible),
               ),
               validator: (value) =>
                   value == null || value.isEmpty ? 'Enter your password' : null,
@@ -179,10 +177,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     showSnackBar(context, 'Missing fields!');
                     return;
                   }
-
-                  // Nasconde la tastiera al tap su Login
                   FocusManager.instance.primaryFocus?.unfocus();
-
                   await ref.read(authViewModelProvider.notifier).loginUser(
                         email: emailController.text.trim(),
                         password: passwordController.text,
@@ -194,9 +189,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ).copyWith(
-                  backgroundColor: WidgetStateProperty.resolveWith(
-                    (states) => null,
-                  ),
+                  backgroundColor:
+                      WidgetStateProperty.resolveWith((states) => null),
                   elevation: WidgetStateProperty.all(8),
                 ),
                 child: Ink(

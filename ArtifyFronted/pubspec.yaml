@@ -55,6 +55,7 @@ dependencies:
   particles_flutter: ^2.0.2
   flutter_animate: ^4.2.0
   particle_effect: ^1.0.5
+  flutter_secure_storage: ^10.0.0
 
 dev_dependencies:
   flutter_test:

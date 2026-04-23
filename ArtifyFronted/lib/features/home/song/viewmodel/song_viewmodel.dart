@@ -5,24 +5,20 @@ import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/repositories/song_local_repository.dart';
 import 'package:client/features/home/song/repositories/song_remote_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'song_viewmodel.g.dart';
 
-Future<String> _readStoredToken() async {
-  final token = await AuthLocalRepository().getToken();
-  if (token == null || token.isEmpty) {
-    throw Exception('User not authenticated');
-  }
-  return token;
-}
-
 /// ───────────────── PROVIDER LISTA SONG ─────────────────
 
 @riverpod
 Future<List<SongModel>> getAllSongs(GetAllSongsRef ref) async {
-  final token = await _readStoredToken();
+  // FIX: usa il provider Riverpod invece di AuthLocalRepository() diretto.
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
+
   final res = await ref.watch(songRemoteRepositoryProvider).getAllSongs(
         token: token,
       );
@@ -35,8 +31,29 @@ Future<List<SongModel>> getAllSongs(GetAllSongsRef ref) async {
 
 @riverpod
 Future<List<SongModel>> getFavSongs(GetFavSongsRef ref) async {
-  final token = await _readStoredToken();
+  // FIX: usa il provider Riverpod.
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
+
   final res = await ref.watch(songRemoteRepositoryProvider).getFavSongs(
+        token: token,
+      );
+
+  return switch (res) {
+    Left(value: final l) => throw l.message,
+    Right(value: final r) => r,
+  };
+}
+
+/// FIX: aggiunto provider per fetch di una singola song by ID.
+/// Usato da artist_actions_row per il fetch-and-play.
+@riverpod
+Future<SongModel> getSong(Ref ref, String songId) async {
+  final token = await ref.watch(authLocalRepositoryProvider).getToken();
+  if (token == null || token.isEmpty) throw Exception('User not authenticated');
+
+  final res = await ref.watch(songRemoteRepositoryProvider).getSongById(
+        songId: songId,
         token: token,
       );
 
@@ -55,7 +72,9 @@ class SongViewModel extends _$SongViewModel {
   SongLocalRepository get _songLocalRepository =>
       ref.read(songLocalRepositoryProvider);
 
-  AuthLocalRepository get _authLocalRepository => AuthLocalRepository();
+  // FIX: usa il provider Riverpod invece di AuthLocalRepository() diretto.
+  AuthLocalRepository get _authLocalRepository =>
+      ref.read(authLocalRepositoryProvider);
 
   @override
   AsyncValue? build() {
@@ -63,6 +82,7 @@ class SongViewModel extends _$SongViewModel {
   }
 
   Future<String> _requireToken() async {
+    // FIX: legge dal provider, non da AuthLocalRepository() istanziato.
     final token = await _authLocalRepository.getToken();
     if (token == null || token.isEmpty) {
       throw Exception('User not authenticated');
@@ -195,6 +215,7 @@ class SongViewModel extends _$SongViewModel {
           state = AsyncValue.error(l.message, StackTrace.current);
 
         case Right(value: final isFavorited):
+          // FIX: _applyFavoriteLocally ora applica effettivamente l'aggiornamento.
           _applyFavoriteLocally(isFavorited, songId);
           ref.invalidate(getFavSongsProvider);
           ref.invalidate(getAllSongsProvider);
@@ -216,10 +237,7 @@ class SongViewModel extends _$SongViewModel {
         ? <String>{...currentFavs, songId}.toList()
         : currentFavs.where((id) => id != songId).toList();
 
-    userNotifier.setUser(
-      currentUser.copyWith(
-        favorites: updatedFavs,
-      ),
-    );
+    // FIX: era dead code — calcolava updatedFavs senza mai applicarlo.
+    userNotifier.setUser(currentUser.copyWith(favoriteSongIds: updatedFavs));
   }
 }

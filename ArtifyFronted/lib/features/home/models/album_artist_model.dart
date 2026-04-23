@@ -1,80 +1,139 @@
 // lib/features/home/album/model/album_artist_model.dart
 
-import 'package:client/features/home/artist/model/artist_model.dart';
+/// Ruoli possibili di un artista su un album.
+/// Allineato a AlbumArtistRole nel backend (enums.py).
+enum AlbumArtistRole {
+  primary,
+  featured,
+  guest;
 
+  static AlbumArtistRole fromString(String? value) {
+    switch (value?.toLowerCase()) {
+      case 'featured':
+        return AlbumArtistRole.featured;
+      case 'guest':
+        return AlbumArtistRole.guest;
+      case 'primary':
+      default:
+        return AlbumArtistRole.primary;
+    }
+  }
+
+  String get value => name; // 'primary', 'featured', 'guest'
+}
+
+/// Modello per una riga di album_artists.
+/// Corrisponde ad AlbumArtistLinkOut del backend.
+///
+/// Nota: [id] e [albumId] non sono presenti in AlbumArtistLinkOut
+/// (il backend non li espone quando annidati in AlbumOut).
+/// Vengono popolati solo se l'API li restituisce (es. endpoint dedicato).
 class AlbumArtistModel {
-  final String id; // id della join album_artists
-  final String albumId; // album_id
-  final String artistId; // artist_id
-  final String? role; // 'primary', 'guest', ecc. (opzionale)
-  final ArtistModel artist;
+  /// Id della riga album_artists — presente solo in endpoint dedicati.
+  final String? id;
+
+  /// album_id — non presente in AlbumArtistLinkOut (implicito dal contesto).
+  final String? albumId;
+
+  /// artist_id — sempre presente.
+  final String artistId;
+
+  /// Ruolo dell'artista sull'album.
+  final AlbumArtistRole role;
+
+  /// Dati artista annidati (ArtistRef: id, name, display_name, image_url).
+  final String artistName;
+  final String? artistDisplayName;
+  final String? artistImageUrl;
 
   const AlbumArtistModel({
-    required this.id,
-    required this.albumId,
+    this.id,
+    this.albumId,
     required this.artistId,
-    required this.artist,
-    this.role,
+    this.role = AlbumArtistRole.primary,
+    required this.artistName,
+    this.artistDisplayName,
+    this.artistImageUrl,
   });
 
   AlbumArtistModel copyWith({
     String? id,
     String? albumId,
     String? artistId,
-    String? role,
-    ArtistModel? artist,
+    AlbumArtistRole? role,
+    String? artistName,
+    String? artistDisplayName,
+    String? artistImageUrl,
   }) {
     return AlbumArtistModel(
       id: id ?? this.id,
       albumId: albumId ?? this.albumId,
       artistId: artistId ?? this.artistId,
       role: role ?? this.role,
-      artist: artist ?? this.artist,
+      artistName: artistName ?? this.artistName,
+      artistDisplayName: artistDisplayName ?? this.artistDisplayName,
+      artistImageUrl: artistImageUrl ?? this.artistImageUrl,
     );
   }
 
+  /// Parsa da AlbumArtistLinkOut:
+  /// { "artist_id": "...", "role": "primary", "artist": { "id": "...", "name": "...", ... } }
   factory AlbumArtistModel.fromMap(Map<String, dynamic> map) {
+    // Dati artista dal nested ArtistRef
     final rawArtist = map['artist'];
+    String artistId = map['artist_id']?.toString() ?? '';
+    String artistName = 'Unknown artist';
+    String? artistDisplayName;
+    String? artistImageUrl;
 
-    // fallback super safe se il backend non manda l'oggetto completo
-    ArtistModel parsedArtist;
     if (rawArtist is Map) {
-      parsedArtist = ArtistModel.fromMap(
-        Map<String, dynamic>.from(rawArtist),
-      );
-    } else {
-      parsedArtist = ArtistModel(
-        id: (map['artist_id']?.toString() ?? ''),
-        name: 'Unknown artist',
-        displayName: null,
-        slug: null,
-        imageUrl: null,
-        bio: null,
-        country: null,
-        // se hai i campi songs/albums metti pure [] come default
-        songs: const [],
-        albums: const [],
-      );
+      final a = Map<String, dynamic>.from(rawArtist);
+      artistId = a['id']?.toString() ?? artistId;
+      artistName = a['name']?.toString() ?? artistName;
+      artistDisplayName = a['display_name']?.toString();
+      artistImageUrl = a['image_url']?.toString();
     }
 
     return AlbumArtistModel(
-      id: map['id']?.toString() ?? '',
-      albumId: map['album_id']?.toString() ?? '',
-      artistId: map['artist_id']?.toString() ?? '',
-      role: map['role'] is String ? map['role'] as String : null,
-      artist: parsedArtist,
+      id: map['id']?.toString(),
+      albumId: map['album_id']?.toString(),
+      artistId: artistId,
+      role: AlbumArtistRole.fromString(map['role']?.toString()),
+      artistName: artistName,
+      artistDisplayName: artistDisplayName,
+      artistImageUrl: artistImageUrl,
     );
   }
 
+  factory AlbumArtistModel.fromJson(Map<String, dynamic> json) =>
+      AlbumArtistModel.fromMap(json);
+
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'album_id': albumId,
+      if (id != null) 'id': id,
+      if (albumId != null) 'album_id': albumId,
       'artist_id': artistId,
-      'role': role,
-      'artist': artist.toJson(), // o toMap() a seconda del tuo ArtistModel
+      'role': role.value,
+      'artist': {
+        'id': artistId,
+        'name': artistName,
+        'display_name': artistDisplayName,
+        'image_url': artistImageUrl,
+      },
     };
   }
 
-  String toJson() => toMap().toString();
+  @override
+  String toString() =>
+      'AlbumArtistModel(artistId: $artistId, role: ${role.value}, name: $artistName)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AlbumArtistModel &&
+          other.artistId == artistId &&
+          other.role == role;
+
+  @override
+  int get hashCode => artistId.hashCode ^ role.hashCode;
 }

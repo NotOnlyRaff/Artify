@@ -1,16 +1,49 @@
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status, HTTPException
-from sqlalchemy.orm import Session
-from datetime import date
 import json
+from datetime import date
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from sqlalchemy.orm import Session
 
 from database import get_db
 from middleware.auth_middleware import auth_middleware, require_role
-from models.user import User, UserRole
-from schemas.song_schema import SongOut
+from models.enums import SongArtistRole, UserRole
+from models.user import User
 from schemas.favorite_schema import FavoriteCreate
+from schemas.song_schema import SongArtistLinkIn, SongOut
 from services.song_service import SongService
 
 router = APIRouter(tags=["songs"])
+
+
+# ------------------------------------------------------------------ #
+#  Schema bridge per multipart upload                                #
+# ------------------------------------------------------------------ #
+
+class SongUploadForm(BaseModel):
+    song_name: str = Field(min_length=1, max_length=100)
+    release_date: date
+    composer_id: Optional[str] = None
+    composer_name: Optional[str] = Field(default=None, max_length=120)
+    producer_id: Optional[str] = None
+    producer_name: Optional[str] = Field(default=None, max_length=120)
+    genre: Optional[str] = Field(default=None, max_length=80)
+    lyrics: Optional[str] = None
+    mood: Optional[str] = Field(default=None, max_length=50)
+    duration_seconds: Optional[int] = Field(default=None, ge=0)
+    artist_links: List[SongArtistLinkIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_composer(self):
+        if not self.composer_id and not self.composer_name:
+            raise ValueError("At least one of composer_id or composer_name must be provided")
+        return self
+
+
+# ------------------------------------------------------------------ #
+#  Upload canzone                                                    #
+# ------------------------------------------------------------------ #
 
 @router.post("/upload", status_code=status.HTTP_201_CREATED, response_model=SongOut)
 async def upload_song(
@@ -18,96 +51,147 @@ async def upload_song(
     thumbnail: UploadFile = File(...),
     song_name: str = Form(...),
     release_date: date = Form(...),
-    composer_name: str = Form(...),
-    producer_name: str | None = Form(None),
-    genre: str | None = Form(None),
-    lyrics: str | None = Form(None),
-    mood: str | None = Form(None),
-    artist_ids_json: str = Form("[]"),
+    composer_id: Optional[str] = Form(None),
+    composer_name: Optional[str] = Form(None),
+    producer_id: Optional[str] = Form(None),
+    producer_name: Optional[str] = Form(None),
+    genre: Optional[str] = Form(None),
+    lyrics: Optional[str] = Form(None),
+    mood: Optional[str] = Form(None),
+    duration_seconds: Optional[int] = Form(None),
+    artist_links_json: str = Form("[]"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
-    # Validazione rapida tipo file
     if not song.content_type or not song.content_type.startswith("audio/"):
-        raise HTTPException(status_code=400, detail="File must be an audio track")
-    #Validazione Copertina
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an audio track",
+        )
     if not thumbnail.content_type or not thumbnail.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Thumbnail must be an image")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thumbnail must be an image",
+        )
 
-
-    # Parsing ID Artisti
     try:
-        parsed_artist_ids = json.loads(artist_ids_json)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="artist_ids_json must be valid JSON")
+        raw_links = json.loads(artist_links_json)
+        if not isinstance(raw_links, list):
+            raise ValueError
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="artist_links_json must be a valid JSON array",
+        )
 
-    if not isinstance(parsed_artist_ids, list):
-        raise HTTPException(status_code=400, detail="artist_ids_json must be a JSON array")
-    
-    # normalizzazione: stringhe, non vuoti, deduplica mantenendo ordine
-    artist_ids = []
-    seen = set()
-    for artist_id in parsed_artist_ids:
-        if not isinstance(artist_id, str) or not artist_id.strip():
-            raise HTTPException(status_code=400, detail="Each artist_id must be a non-empty string")
-        if artist_id not in seen:
-            seen.add(artist_id)
-            artist_ids.append(artist_id)
+    try:
+        artist_links: List[SongArtistLinkIn] = [
+            SongArtistLinkIn(**link) for link in raw_links
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid artist_links format: {str(e)}",
+        )
 
-    # regola di ownership
     if current_user.role == UserRole.ARTIST:
         if not current_user.artist_id:
             raise HTTPException(
-                status_code=403,
-                detail="Current artist user has no linked artist profile"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No linked artist profile",
             )
 
-        # forza il proprio artist_id nella song
-        if current_user.artist_id not in artist_ids:
-            artist_ids.insert(0, current_user.artist_id)
+        if current_user.artist_id not in {link.artist_id for link in artist_links}:
+            artist_links.insert(
+                0,
+                SongArtistLinkIn(
+                    artist_id=current_user.artist_id,
+                    role=SongArtistRole.PRIMARY,
+                ),
+            )
 
     elif current_user.role == UserRole.ADMIN:
-        if not artist_ids:
+        if not artist_links:
             raise HTTPException(
-                status_code=400,
-                detail="Admin must provide at least one artist_id"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin must provide at least one artist",
             )
 
-    song_data = {
-        "song_name": song_name,
-        "release_date": release_date,
-        "composer_name": composer_name,
-        "producer_name": producer_name,
-        "genre": genre,
-        "lyrics": lyrics,
-        "mood": mood,
-    }
+    try:
+        song_form = SongUploadForm(
+            song_name=song_name,
+            release_date=release_date,
+            composer_id=composer_id,
+            composer_name=composer_name,
+            producer_id=producer_id,
+            producer_name=producer_name,
+            genre=genre,
+            lyrics=lyrics,
+            mood=mood,
+            duration_seconds=duration_seconds,
+            artist_links=artist_links,
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
+        )
 
     return SongService.upload_song(
         db=db,
         song_file=song,
         thumbnail_file=thumbnail,
-        song_data=song_data,
-        artist_ids=artist_ids,
+        song_data=song_form,
     )
 
 
-@router.get("/list", response_model=list[SongOut])
+# ------------------------------------------------------------------ #
+#  Lista canzoni                                                     #
+# ------------------------------------------------------------------ #
+
+@router.get("/list")
 def list_songs(
     db: Session = Depends(get_db),
-    _ = Depends(auth_middleware) # Chiunque loggato può vedere la lista
+    limit: int = 20,
+    offset: int = 0,
+    _=Depends(auth_middleware),
 ):
-    return SongService.get_all_songs(db)
+    return SongService.get_all_songs(db, limit=limit, offset=offset)
 
-@router.post("/favorite")
+
+# ------------------------------------------------------------------ #
+#  Singola canzone                                                   #
+# ------------------------------------------------------------------ #
+
+@router.get("/{song_id}", response_model=SongOut)
+def get_song(
+    song_id: str,
+    db: Session = Depends(get_db),
+    _=Depends(auth_middleware),
+):
+    return SongService.get_song_by_id(db=db, song_id=song_id)
+
+
+# ------------------------------------------------------------------ #
+#  Preferiti                                                         #
+# ------------------------------------------------------------------ #
+
+@router.post("/favorite", status_code=status.HTTP_200_OK)
 def favorite_song(
     payload: FavoriteCreate,
     db: Session = Depends(get_db),
-    auth_data: dict = Depends(auth_middleware)
+    auth_data: dict = Depends(auth_middleware),
 ):
     is_added = SongService.toggle_favorite(db, auth_data["uid"], payload.song_id)
-    return {"message": is_added}
+    return {
+        "added": is_added,
+        "message": "Song added to favorites" if is_added else "Song removed from favorites",
+    }
 
+
+# ------------------------------------------------------------------ #
+#  Eliminazione                                                      #
+# ------------------------------------------------------------------ #
 
 @router.delete("/{song_id}", status_code=status.HTTP_200_OK)
 def delete_song(
@@ -115,9 +199,5 @@ def delete_song(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
-    SongService.delete_song(
-        db=db,
-        song_id=song_id,
-        current_user=current_user,
-    )
+    SongService.delete_song(db=db, song_id=song_id, current_user=current_user)
     return {"message": "Song deleted successfully"}

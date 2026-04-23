@@ -60,11 +60,8 @@ class MyApp extends ConsumerWidget {
         data: (user) => user == null ? const LoginPage() : const HomePage(),
       ),
       builder: (context, child) {
-        return Stack(
-          children: [
-            const SpaceBackground(),
-            if (child != null) child,
-          ],
+        return SpaceShell(
+          child: child ?? const SizedBox.shrink(),
         );
       },
     );

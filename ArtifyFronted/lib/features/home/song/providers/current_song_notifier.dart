@@ -101,9 +101,45 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     );
   }
 
+  String _normalizedPlaybackUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed == null) return trimmed;
+
+    var uri = parsed;
+    if (uri.scheme == 'http') {
+      uri = uri.replace(scheme: 'https');
+    }
+
+    final host = uri.host.toLowerCase();
+    final path = uri.path;
+    const uploadSegment = '/video/upload/';
+
+    if (host != 'res.cloudinary.com' || !path.contains(uploadSegment)) {
+      return uri.toString();
+    }
+
+    final alreadyTransformed =
+        path.contains('/video/upload/f_') || path.contains('/video/upload/q_');
+    if (alreadyTransformed) {
+      return uri.toString();
+    }
+
+    final uploadIndex = path.indexOf(uploadSegment);
+    final transformedPath =
+        '${path.substring(0, uploadIndex + uploadSegment.length)}'
+        'f_mp3,q_auto'
+        '${path.substring(uploadIndex + uploadSegment.length)}';
+
+    return uri.replace(path: transformedPath).toString();
+  }
+
   AudioSource _buildSongSource(SongModel song) {
+    final playbackUrl = _normalizedPlaybackUrl(song.songUrl);
     return AudioSource.uri(
-      Uri.parse(song.songUrl),
+      Uri.parse(playbackUrl),
       tag: _buildMediaItem(song),
     );
   }
@@ -209,6 +245,11 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     isPlaying = false;
 
     try {
+      final playbackUrl = _normalizedPlaybackUrl(song.songUrl);
+      if (playbackUrl.isEmpty) {
+        throw StateError('Missing playback URL for song ${song.id}');
+      }
+
       final queueState = ref.read(playbackQueueControllerProvider);
       final queueSongs =
           queueState.items.map((item) => item.song).toList(growable: false);
@@ -225,7 +266,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
 
       if (_isStaleRequest(requestId)) return;
       await applyRepeatMode(queueState.repeatMode);
-      debugPrint('[CurrentSongNotifier] setAudioSource -> ${song.songUrl}');
+      debugPrint('[CurrentSongNotifier] setAudioSource -> $playbackUrl');
       await _audioPlayer.setAudioSource(
         _buildQueueSource(playbackSongs),
         initialIndex: initialIndex,

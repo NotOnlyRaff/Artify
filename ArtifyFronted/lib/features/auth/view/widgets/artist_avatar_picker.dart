@@ -16,6 +16,12 @@ class ArtistAvatarPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final previewImage = switch ((selectedImage?.bytes, selectedImage?.asFile)) {
+      (final bytes?, _) => MemoryImage(bytes) as ImageProvider,
+      (_, final file?) => FileImage(file),
+      _ => null,
+    };
+
     return Center(
       child: GestureDetector(
         onTap: onSelectImage,
@@ -29,7 +35,7 @@ class ArtistAvatarPicker extends StatelessWidget {
                 border: Border.all(
                   color: Colors.white.withOpacity(0.12),
                 ),
-                gradient: selectedImage == null
+                gradient: previewImage == null
                     ? const LinearGradient(
                         colors: [
                           Pallete.gradient1,
@@ -39,15 +45,15 @@ class ArtistAvatarPicker extends StatelessWidget {
                         end: Alignment.bottomRight,
                       )
                     : null,
-                image: selectedImage?.bytes != null
+                image: previewImage != null
                     ? DecorationImage(
-                        image: MemoryImage(selectedImage!.bytes!),
+                        image: previewImage,
                         fit: BoxFit.cover,
                       )
                     : null,
-                color: selectedImage == null ? null : Colors.white12,
+                color: previewImage == null ? null : Colors.white12,
               ),
-              child: selectedImage == null
+              child: previewImage == null
                   ? const Icon(
                       Icons.add_a_photo_rounded,
                       color: Colors.white,

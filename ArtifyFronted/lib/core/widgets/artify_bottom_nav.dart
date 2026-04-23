@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/features/auth/models/user_model.dart';
 import 'package:flutter/material.dart';
@@ -106,43 +108,53 @@ class ArtifyBottomNav extends StatelessWidget {
     final items = _buildItems();
     final safeIndex = selectedIndex >= items.length ? 0 : selectedIndex;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF050509),
-            Color(0xFF120A1B),
-          ],
-        ),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.6),
-            blurRadius: 24,
-            offset: const Offset(0, -8),
-          ),
-        ],
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(24),
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: height,
-          child: BottomNavigationBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            type: BottomNavigationBarType.fixed,
-            currentIndex: safeIndex,
-            onTap: onItemSelected,
-            selectedItemColor: Pallete.whiteColor,
-            unselectedItemColor: Pallete.inactiveBottomBarItemColor,
-            selectedFontSize: 12,
-            unselectedFontSize: 11,
-            showUnselectedLabels: true,
-            items: items,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xE604050E),
+                Color(0xE60A0E1A),
+              ],
+            ),
+            border: Border(
+              top: BorderSide(
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.32),
+                blurRadius: 18,
+                offset: const Offset(0, -6),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: height,
+              child: BottomNavigationBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                type: BottomNavigationBarType.fixed,
+                currentIndex: safeIndex,
+                onTap: onItemSelected,
+                selectedItemColor: Pallete.whiteColor,
+                unselectedItemColor: Pallete.inactiveBottomBarItemColor,
+                selectedFontSize: 12,
+                unselectedFontSize: 11,
+                showUnselectedLabels: true,
+                items: items,
+              ),
+            ),
           ),
         ),
       ),

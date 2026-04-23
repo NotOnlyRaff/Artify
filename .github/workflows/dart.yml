@@ -1,4 +1,4 @@
-name: iOS IPA Build
+name: iOS-ipa-build
 
 on:
   workflow_dispatch:
@@ -7,46 +7,46 @@ on:
       - deploy
     paths:
       - 'ArtifyFronted/**'
-      - '.github/workflows/ios-build.yml'
 
 jobs:
   build-ios:
-    name: Build unsigned iOS IPA
+    name: 🎉 iOS Build
     runs-on: macos-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    defaults:
+      run:
+        working-directory: ArtifyFronted
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+          architecture: x64
 
-      - name: Flutter pub get
-        run: flutter pub get
-        working-directory: ArtifyFronted
+      - run: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        run: pod install --repo-update
+      - run: pod repo update
         working-directory: ArtifyFronted/ios
 
-      - name: Build iOS app without code signing
-        run: flutter build ios --release --no-codesign
-        working-directory: ArtifyFronted
+      - run: flutter build ios --release --no-codesign
 
-      - name: Package unsigned IPA
-        shell: bash
-        run: |
-          rm -rf Payload FlutterIpaExport.ipa
-          mkdir Payload
-          mv Runner.app Payload/
-          zip -qq -r -9 FlutterIpaExport.ipa Payload
+      - run: mkdir -p Payload
         working-directory: ArtifyFronted/build/ios/iphoneos
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+      - run: mv Runner.app Payload/
+        working-directory: ArtifyFronted/build/ios/iphoneos
+
+      - name: Zip output
+        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
+        working-directory: ArtifyFronted/build/ios/iphoneos
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: artify-ios-unsigned-ipa
-          path: ArtifyFronted/build/ios/iphoneos/FlutterIpaExport.ipa
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ArtifyFronted/build/ios/iphoneos/FlutterIpaExport.ipa
+          tag: v1.0
+          overwrite: true
+          body: "This is first release"

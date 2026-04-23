@@ -2,6 +2,20 @@ name: iOS-ipa-build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - deploy
+    paths:
+      - 'ArtifyFronted/**'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ArtifyFronted
+
 
 jobs:
   build-ios:

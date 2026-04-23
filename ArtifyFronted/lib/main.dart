@@ -23,9 +23,6 @@ void main() async {
 
   await Hive.initFlutter();
   await Hive.openBox('recent_songs');
-  // FIX: aggiunta apertura box 'recent_artists' — usata da ArtistLocalRepository.
-  // Senza questa riga, la prima chiamata a markArtistOpened() o
-  // getRecentlyOpenedArtists() lancia HiveError("Box not open").
   await Hive.openBox('recent_artists');
   await Hive.openBox('recent_albums');
   await Hive.openBox('playback_queue');

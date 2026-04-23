@@ -1,0 +1,55 @@
+name: iOS-ipa-build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - deploy
+    paths:
+      - 'ArtifyFronted/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    name: 🎉 iOS Build
+    runs-on: macos-latest
+
+    defaults:
+      run:
+        working-directory: ArtifyFronted
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          architecture: x64
+
+      - run: flutter pub get
+
+      - run: pod repo update
+        working-directory: ArtifyFronted/ios
+
+      - run: flutter build ios --release --no-codesign
+
+      - run: mkdir -p Payload
+        working-directory: ArtifyFronted/build/ios/iphoneos
+
+      - run: mv Runner.app Payload/
+        working-directory: ArtifyFronted/build/ios/iphoneos
+
+      - name: Zip output
+        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
+        working-directory: ArtifyFronted/build/ios/iphoneos
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ArtifyFronted/build/ios/iphoneos/FlutterIpaExport.ipa
+          tag: v1.0
+          overwrite: true
+          body: "This is first release"

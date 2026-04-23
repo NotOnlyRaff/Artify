@@ -224,8 +224,14 @@ class ArtistService:
             )
 
         slug = ArtistService._ensure_slug_available(db, payload.slug)
-        songs = ArtistService._resolve_songs(db, payload.song_ids or [])
-        albums = ArtistService._resolve_albums(db, payload.album_ids or [])
+
+        # song_ids e album_ids non fanno parte del contratto minimo di ArtistCreate.
+        # Se arriveranno da una futura estensione dello schema, li supportiamo;
+        # se non esistono nel payload, non rompiamo la creazione del profilo.
+        song_ids = getattr(payload, "song_ids", None)
+        album_ids = getattr(payload, "album_ids", None)
+        songs = ArtistService._resolve_songs(db, song_ids or [])
+        albums = ArtistService._resolve_albums(db, album_ids or [])
 
         # FIX: id non passato — generato dal default del model.
         # FIX: AnyHttpUrl convertita a str.

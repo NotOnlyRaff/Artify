@@ -4,7 +4,6 @@
 //}
 
 class ServerConstant {
-  //static String serverURL = 'https://artify-production-1354.up.railway.app';
-  static String serverURL = 'http://localhost:8000';
-  
+  static String serverURL = 'https://artify-production-474b.up.railway.app';
+  //static String serverURL = 'http://localhost:8000';
 }

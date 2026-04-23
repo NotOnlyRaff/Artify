@@ -9,16 +9,11 @@ on:
       - 'ArtifyFronted/**'
 
 jobs:
-  build-apk:
-    runs-on: ubuntu-latest
-
+  build-ios:
     defaults:
       run:
-        working-directory: ArtifyFronted
-
-
-jobs:
-  build-ios:
+        working-directory: ArtifyFrontend
+        
     name: 🎉 iOS Build
     runs-on: macos-latest
     steps:

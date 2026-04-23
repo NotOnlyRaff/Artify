@@ -113,18 +113,25 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       uri = uri.replace(scheme: 'https');
     }
 
+    return uri.toString();
+  }
+
+  String? _cloudinaryMp3FallbackUrl(String normalizedUrl) {
+    final uri = Uri.tryParse(normalizedUrl);
+    if (uri == null) return null;
+
     final host = uri.host.toLowerCase();
     final path = uri.path;
     const uploadSegment = '/video/upload/';
 
     if (host != 'res.cloudinary.com' || !path.contains(uploadSegment)) {
-      return uri.toString();
+      return null;
     }
 
     final alreadyTransformed =
         path.contains('/video/upload/f_') || path.contains('/video/upload/q_');
     if (alreadyTransformed) {
-      return uri.toString();
+      return null;
     }
 
     final uploadIndex = path.indexOf(uploadSegment);
@@ -136,21 +143,44 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     return uri.replace(path: transformedPath).toString();
   }
 
-  AudioSource _buildSongSource(SongModel song) {
-    final playbackUrl = _normalizedPlaybackUrl(song.songUrl);
+  List<String> _playbackCandidates(String rawUrl) {
+    final normalized = _normalizedPlaybackUrl(rawUrl);
+    if (normalized.isEmpty) return const [];
+
+    final candidates = <String>[normalized];
+    final cloudinaryFallback = _cloudinaryMp3FallbackUrl(normalized);
+    if (cloudinaryFallback != null && cloudinaryFallback != normalized) {
+      candidates.add(cloudinaryFallback);
+    }
+    return candidates;
+  }
+
+  AudioSource _buildSongSource(SongModel song, {String? playbackUrl}) {
     return AudioSource.uri(
-      Uri.parse(playbackUrl),
+      Uri.parse(playbackUrl ?? _normalizedPlaybackUrl(song.songUrl)),
       tag: _buildMediaItem(song),
     );
   }
 
-  AudioSource _buildQueueSource(List<SongModel> songs) {
+  AudioSource _buildQueueSource(
+    List<SongModel> songs, {
+    int? overrideIndex,
+    String? overrideUrl,
+  }) {
     if (songs.length == 1) {
-      return _buildSongSource(songs.first);
+      return _buildSongSource(
+        songs.first,
+        playbackUrl: overrideIndex == 0 ? overrideUrl : null,
+      );
     }
 
     return ConcatenatingAudioSource(
-      children: songs.map(_buildSongSource).toList(growable: false),
+      children: songs.asMap().entries.map((entry) {
+        return _buildSongSource(
+          entry.value,
+          playbackUrl: entry.key == overrideIndex ? overrideUrl : null,
+        );
+      }).toList(growable: false),
     );
   }
 
@@ -245,8 +275,8 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     isPlaying = false;
 
     try {
-      final playbackUrl = _normalizedPlaybackUrl(song.songUrl);
-      if (playbackUrl.isEmpty) {
+      final playbackCandidates = _playbackCandidates(song.songUrl);
+      if (playbackCandidates.isEmpty) {
         throw StateError('Missing playback URL for song ${song.id}');
       }
 
@@ -264,26 +294,69 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       await _audioPlayer.stop();
       if (_isStaleRequest(requestId)) return;
 
-      if (_isStaleRequest(requestId)) return;
-      await applyRepeatMode(queueState.repeatMode);
-      debugPrint('[CurrentSongNotifier] setAudioSource -> $playbackUrl');
-      await _audioPlayer.setAudioSource(
-        _buildQueueSource(playbackSongs),
-        initialIndex: initialIndex,
-        initialPosition: Duration.zero,
-      );
-      debugPrint('[CurrentSongNotifier] setAudioSource DONE');
-      if (_isStaleRequest(requestId)) return;
+      Object? lastError;
+      StackTrace? lastStackTrace;
+      var started = false;
 
-      if (autoplay) {
-        unawaited(_songLocalRepository.saveRecentlyPlayed(song));
-        if (_isStaleRequest(requestId)) return;
-        await _audioPlayer.play();
-        debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
-        if (_isStaleRequest(requestId)) return;
-        isPlaying = true;
-      } else {
-        isPlaying = false;
+      for (final playbackUrl in playbackCandidates) {
+        try {
+          if (_isStaleRequest(requestId)) return;
+          await applyRepeatMode(queueState.repeatMode);
+          debugPrint('[CurrentSongNotifier] setAudioSource -> $playbackUrl');
+          await _audioPlayer.setAudioSource(
+            _buildQueueSource(
+              playbackSongs,
+              overrideIndex: initialIndex,
+              overrideUrl: playbackUrl,
+            ),
+            initialIndex: initialIndex,
+            initialPosition: Duration.zero,
+          );
+          debugPrint('[CurrentSongNotifier] setAudioSource DONE');
+          if (_isStaleRequest(requestId)) return;
+
+          if (autoplay) {
+            unawaited(_songLocalRepository.saveRecentlyPlayed(song));
+            if (_isStaleRequest(requestId)) return;
+            await _audioPlayer.play();
+            debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
+            if (_isStaleRequest(requestId)) return;
+            isPlaying = true;
+          } else {
+            isPlaying = false;
+          }
+
+          started = true;
+          break;
+        } on PlayerException catch (e, st) {
+          lastError = e;
+          lastStackTrace = st;
+          debugPrint(
+            '[CurrentSongNotifier] candidate failed -> '
+            'code=${e.code}, message=${e.message}, url=$playbackUrl\n$st',
+          );
+          try {
+            await _audioPlayer.stop();
+          } catch (_) {}
+        } catch (e, st) {
+          lastError = e;
+          lastStackTrace = st;
+          debugPrint(
+            '[CurrentSongNotifier] candidate failed -> url=$playbackUrl\n$e\n$st',
+          );
+          try {
+            await _audioPlayer.stop();
+          } catch (_) {}
+        }
+      }
+
+      if (!started) {
+        if (lastError is PlayerException) {
+          throw lastError;
+        }
+        throw StateError(
+          'Unable to start playback for ${song.id}: ${lastError ?? 'unknown error'}\n${lastStackTrace ?? ''}',
+        );
       }
 
       if (_isStaleRequest(requestId)) return;
@@ -330,24 +403,68 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     final shouldAutoplay = autoplay ?? isPlaying;
     final currentPosition =
         preservePosition ? _audioPlayer.position : Duration.zero;
+    final currentSong = songs[currentIndex];
+    final playbackCandidates = _playbackCandidates(currentSong.songUrl);
 
-    state = songs[currentIndex];
+    if (playbackCandidates.isEmpty) return;
+
+    state = currentSong;
 
     try {
-      await applyRepeatMode(queueState.repeatMode);
-      await _audioPlayer.setAudioSource(
-        _buildQueueSource(songs),
-        initialIndex: currentIndex,
-        initialPosition: currentPosition,
-      );
-      if (_isStaleRequest(requestId)) return;
+      Object? lastError;
+      StackTrace? lastStackTrace;
+      var refreshed = false;
 
-      if (shouldAutoplay) {
-        await _audioPlayer.play();
-        isPlaying = true;
-      } else {
-        await _audioPlayer.pause();
-        isPlaying = false;
+      for (final playbackUrl in playbackCandidates) {
+        try {
+          await applyRepeatMode(queueState.repeatMode);
+          await _audioPlayer.setAudioSource(
+            _buildQueueSource(
+              songs,
+              overrideIndex: currentIndex,
+              overrideUrl: playbackUrl,
+            ),
+            initialIndex: currentIndex,
+            initialPosition: currentPosition,
+          );
+          if (_isStaleRequest(requestId)) return;
+
+          if (shouldAutoplay) {
+            await _audioPlayer.play();
+            isPlaying = true;
+          } else {
+            await _audioPlayer.pause();
+            isPlaying = false;
+          }
+
+          refreshed = true;
+          break;
+        } on PlayerException catch (e, st) {
+          lastError = e;
+          lastStackTrace = st;
+          debugPrint(
+            '[CurrentSongNotifier] refresh candidate failed -> '
+            'code=${e.code}, message=${e.message}, url=$playbackUrl\n$st',
+          );
+          try {
+            await _audioPlayer.stop();
+          } catch (_) {}
+        } catch (e, st) {
+          lastError = e;
+          lastStackTrace = st;
+          debugPrint(
+            '[CurrentSongNotifier] refresh candidate failed -> url=$playbackUrl\n$e\n$st',
+          );
+          try {
+            await _audioPlayer.stop();
+          } catch (_) {}
+        }
+      }
+
+      if (!refreshed) {
+        throw StateError(
+          'Unable to refresh playback for ${currentSong.id}: ${lastError ?? 'unknown error'}\n${lastStackTrace ?? ''}',
+        );
       }
 
       if (_isStaleRequest(requestId)) return;

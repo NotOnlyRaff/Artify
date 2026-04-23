@@ -9,14 +9,13 @@ class SpaceBackground extends StatefulWidget {
 }
 
 class SpaceBackgroundState extends State<SpaceBackground> {
-  static const Offset _inactiveTouchPoint = Offset(-10000, -10000);
   final GlobalKey<ParticleNetworkState> _networkKey =
       GlobalKey<ParticleNetworkState>();
 
   void updateTouch(Offset? touchPoint) {
     final state = _networkKey.currentState;
     if (state == null) return;
-    state.touchPoint = touchPoint ?? _inactiveTouchPoint;
+    state.touchPoint = touchPoint ?? Offset.infinite;
   }
 
   @override
@@ -45,7 +44,7 @@ class SpaceBackgroundState extends State<SpaceBackground> {
           lineDistance: 100,
           particleColor: Colors.white24,
           lineColor: Colors.white12,
-          touchActivation: false,
+          touchActivation: true,
         ),
       ],
     );

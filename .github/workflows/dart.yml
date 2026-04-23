@@ -8,6 +8,9 @@ on:
     paths:
       - 'ArtifyFronted/**'
 
+permissions:
+  contents: write
+
 jobs:
   build-ios:
     name: 🎉 iOS Build

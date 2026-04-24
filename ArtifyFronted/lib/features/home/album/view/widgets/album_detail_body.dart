@@ -15,7 +15,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 final albumPlayableSongsProvider =
     FutureProvider.family<List<SongModel>, String>((ref, albumId) async {
-  final album = await ref.read(getAlbumProvider(albumId).future);
+  final album = await ref.watch(getAlbumProvider(albumId).future);
   if (album.tracks.isEmpty) return const <SongModel>[];
 
   final songs = <SongModel>[];

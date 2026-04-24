@@ -60,7 +60,7 @@ class AlbumTrack {
 /// - Rimosso totalTracks: il campo è stato eliminato dal model backend.
 ///   Per il conteggio tracce usa tracks.length.
 /// - artists ora parsato da album_artist_links (non più da 'artists').
-/// - Aggiunto tracks (List<AlbumTrack>) da album_song_links.
+/// - Aggiunto tracks (`List<AlbumTrack>`) da album_song_links.
 /// - fromJson e fromMap unificati.
 class AlbumModel {
   final String id;
@@ -129,6 +129,15 @@ class AlbumModel {
     final tracks = (rawTracks as List)
         .map((e) => AlbumTrack.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList(growable: false);
+    final orderedTracks = [...tracks]..sort((a, b) {
+        final aNumber = a.trackNumber;
+        final bNumber = b.trackNumber;
+
+        if (aNumber == null && bNumber == null) return 0;
+        if (aNumber == null) return 1;
+        if (bNumber == null) return -1;
+        return aNumber.compareTo(bNumber);
+      });
 
     return AlbumModel(
       id: map['id']?.toString() ?? '',
@@ -141,7 +150,7 @@ class AlbumModel {
       albumType: map['album_type']?.toString(),
       genre: map['genre']?.toString(),
       artists: artists,
-      tracks: tracks,
+      tracks: orderedTracks,
     );
   }
 

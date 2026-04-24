@@ -1,7 +1,6 @@
 import uuid
-from typing import Optional
 
-from sqlalchemy import TEXT, ForeignKey, UniqueConstraint
+from sqlalchemy import INTEGER, TEXT, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base, TimestampMixin
@@ -22,7 +21,7 @@ class AlbumSong(TimestampMixin, Base):
         ForeignKey("songs.id", ondelete="CASCADE"),
         index=True,
     )
-    track_number: Mapped[Optional[int]]
+    track_number: Mapped[int] = mapped_column(INTEGER, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("album_id", "song_id", name="uq_album_song"),

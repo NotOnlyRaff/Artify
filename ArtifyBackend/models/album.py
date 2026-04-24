@@ -29,6 +29,7 @@ class Album(TimestampMixin, Base):
     album_song_links: Mapped[List["AlbumSong"]] = relationship(
         back_populates="album",
         cascade="all, delete-orphan",
+        order_by="AlbumSong.track_number",
     )
 
     def __repr__(self) -> str:

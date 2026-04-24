@@ -264,27 +264,36 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
         'SAVE_PAYLOAD artistIds=$artistIds songIds=$songIds coverChanged=${_selectedCover != null}',
       );
 
-      await ref.read(albumViewModelProvider.notifier).updateAlbum(
-            albumId: widget.albumId,
-            title: _titleController.text.trim(),
-            releaseDate: _releaseDate,
-            label: _emptyToNull(_labelController.text),
-            albumType: _selectedAlbumType,
-            genre: _emptyToNull(_genreController.text),
-            coverUrl: coverUrl,
-            artistIds: artistIds,
-            songIds: songIds,
-            debugId: debugId,
-          );
+      final updateRes =
+          await ref.read(albumViewModelProvider.notifier).updateAlbum(
+                albumId: widget.albumId,
+                title: _titleController.text.trim(),
+                releaseDate: _releaseDate,
+                label: _emptyToNull(_labelController.text),
+                albumType: _selectedAlbumType,
+                genre: _emptyToNull(_genreController.text),
+                coverUrl: coverUrl,
+                artistIds: artistIds,
+                songIds: songIds,
+                debugId: debugId,
+              );
 
-      final state = ref.read(albumViewModelProvider);
-      if (state?.hasError == true) {
-        _debugAlbumEdit(debugId, 'SAVE_ERROR state=$state');
-        if (!mounted) return;
-        showSnackBar(context, state!.error.toString());
-        return;
+      switch (updateRes) {
+        case Left(value: final failure):
+          _debugAlbumEdit(debugId, 'SAVE_ERROR failure=${failure.message}');
+          if (!mounted) return;
+          showSnackBar(context, failure.message);
+          return;
+        case Right(value: final updatedAlbum):
+          _debugAlbumEdit(
+            debugId,
+            'SAVE_SUCCESS responseOrder=${jsonEncode(updatedAlbum.tracks.asMap().entries.map((entry) => {
+                  'position': entry.key + 1,
+                  'songId': entry.value.songId,
+                  'trackNumber': entry.value.trackNumber,
+                }).toList())}',
+          );
       }
-      _debugAlbumEdit(debugId, 'SAVE_SUCCESS state=$state');
 
       ref.invalidate(getArtistProvider(widget.studioArtist.id));
       ref.invalidate(getAlbumProvider(widget.albumId));

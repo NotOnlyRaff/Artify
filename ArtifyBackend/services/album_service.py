@@ -102,6 +102,22 @@ class AlbumService:
         return [(row.song_id, row.track_number) for row in rows]
 
     @staticmethod
+    def _album_artist_order(db: Session, album_id: str) -> list[tuple[str, str]]:
+        rows = (
+            db.query(AlbumArtist.artist_id, AlbumArtist.role)
+            .filter(AlbumArtist.album_id == album_id)
+            .order_by(AlbumArtist.artist_id.asc(), AlbumArtist.role.asc())
+            .all()
+        )
+        return [
+            (
+                row.artist_id,
+                row.role.value if isinstance(row.role, AlbumArtistRole) else str(row.role),
+            )
+            for row in rows
+        ]
+
+    @staticmethod
     def _ordered_song_links(song_links) -> list[dict[str, int | str]]:
         ordered_links: list[dict[str, int | str]] = []
 
@@ -173,6 +189,50 @@ class AlbumService:
         AlbumService._album_debug(
             debug_id,
             f"SYNC after_insert_order={AlbumService._album_song_order(db, album.id)}",
+        )
+
+    @staticmethod
+    def _sync_album_artist_links(
+        album: Album,
+        artist_ids: list[str],
+        db: Session,
+        debug_id: str | None = None,
+    ) -> None:
+        rows = [
+            {
+                "id": str(uuid.uuid4()),
+                "album_id": album.id,
+                "artist_id": artist_id,
+                "role": AlbumArtistRole.PRIMARY.value,
+            }
+            for artist_id in artist_ids
+        ]
+
+        AlbumService._album_debug(
+            debug_id,
+            f"ARTISTS prepared_rows={[(row['artist_id'], row['role']) for row in rows]}",
+        )
+
+        delete_result = db.execute(delete(AlbumArtist).where(AlbumArtist.album_id == album.id))
+        AlbumService._album_debug(
+            debug_id,
+            f"ARTISTS delete album_artists rowcount={getattr(delete_result, 'rowcount', None)}",
+        )
+        db.flush()
+        AlbumService._album_debug(
+            debug_id,
+            f"ARTISTS after_delete={AlbumService._album_artist_order(db, album.id)}",
+        )
+
+        if rows:
+            db.execute(insert(AlbumArtist), rows)
+            db.flush()
+            AlbumService._album_debug(debug_id, f"ARTISTS inserted_rows={len(rows)}")
+
+        db.expire(album, ["album_artist_links"])
+        AlbumService._album_debug(
+            debug_id,
+            f"ARTISTS after_insert={AlbumService._album_artist_order(db, album.id)}",
         )
 
     @staticmethod
@@ -425,6 +485,10 @@ class AlbumService:
                 debug_id,
                 f"DB before_order={AlbumService._album_song_order(db, album.id)}",
             )
+            AlbumService._album_debug(
+                debug_id,
+                f"DB before_artists={AlbumService._album_artist_order(db, album.id)}",
+            )
 
             for field in ("title", "release_date", "label", "album_type", "genre"):
                 if field in update_dict:
@@ -439,14 +503,19 @@ class AlbumService:
                 artist_ids = AlbumService._ensure_manageable_artist_ids(
                     requester, update_dict["artist_ids"]
                 )
-                resolved_artists = AlbumService._resolve_artists(db, artist_ids)
-                album.album_artist_links.clear()
-                for artist in resolved_artists:
-                    # FIX: AlbumArtistRole.PRIMARY — role NOT NULL nel model.
-                    # FIX: id non passato.
-                    album.album_artist_links.append(
-                        AlbumArtist(album=album, artist=artist, role=AlbumArtistRole.PRIMARY)
-                    )
+                AlbumService._resolve_artists(db, artist_ids)
+                AlbumService._sync_album_artist_links(
+                    album=album,
+                    artist_ids=artist_ids,
+                    db=db,
+                    debug_id=debug_id,
+                )
+
+            else:
+                AlbumService._album_debug(
+                    debug_id,
+                    "ARTISTS missing from update_dict: album artists will not be touched",
+                )
 
             if "song_links" in update_dict:
                 song_links = AlbumService._ordered_song_links(

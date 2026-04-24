@@ -132,7 +132,7 @@ class AlbumViewModel extends _$AlbumViewModel {
 
   // ────────────── AGGIORNAMENTO ──────────────
 
-  Future<void> updateAlbum({
+  Future<Either<AppFailure, AlbumModel>> updateAlbum({
     required String albumId,
     String? title,
     DateTime? releaseDate,
@@ -172,6 +172,7 @@ class AlbumViewModel extends _$AlbumViewModel {
         case Left(value: final failure):
           _debugAlbumUpdate(debugLabel, 'FAILURE ${failure.message}');
           state = AsyncValue.error(failure.message, StackTrace.current);
+          return Left(failure);
 
         case Right(value: final album):
           _debugAlbumUpdate(
@@ -184,10 +185,12 @@ class AlbumViewModel extends _$AlbumViewModel {
             await _local.saveRecentlyOpened(album);
           } catch (_) {}
           state = AsyncValue.data(album);
+          return Right(album);
       }
     } catch (e) {
       _debugAlbumUpdate(debugLabel, 'EXCEPTION $e');
       state = AsyncValue.error(e.toString(), StackTrace.current);
+      return Left(AppFailure(e.toString()));
     }
   }
 

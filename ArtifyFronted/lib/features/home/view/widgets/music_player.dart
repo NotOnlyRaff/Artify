@@ -57,7 +57,8 @@ class MusicPlayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentSong = ref.watch(currentSongNotifierProvider);
+    final currentSongState = ref.watch(currentSongNotifierProvider);
+    final currentSong = currentSongState.song;
     final queueState = ref.watch(playbackQueueControllerProvider);
     final songNotifier = ref.read(currentSongNotifierProvider.notifier);
     final queueController = ref.read(playbackQueueControllerProvider.notifier);
@@ -94,7 +95,7 @@ class MusicPlayer extends ConsumerWidget {
     final isFav = userFavorites.any((fav) => fav == currentSong.id);
     final artistName = _primaryArtistName(currentSong);
     final size = MediaQuery.of(context).size;
-    final upcoming = queueState.upcomingItems;
+    final queuedItems = queueState.queuedItems;
     final queuedCount = queueState.queuedCount;
     final queueSongs = queueState.items.map((item) => item.song).toList();
     final currentQueueIndex = queueState.currentIndex ?? 0;
@@ -433,7 +434,7 @@ class MusicPlayer extends ConsumerWidget {
                                         },
                                         iconSize: 40,
                                         icon: Icon(
-                                          songNotifier.isPlaying
+                                          currentSongState.isPlaying
                                               ? CupertinoIcons.pause_fill
                                               : CupertinoIcons.play_fill,
                                           color: Colors.white,
@@ -472,7 +473,7 @@ class MusicPlayer extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(height: 20),
-                            if (upcoming.isNotEmpty)
+                            if (queuedItems.isNotEmpty)
                               Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(14),
@@ -496,7 +497,7 @@ class MusicPlayer extends ConsumerWidget {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      upcoming.first.song.songName,
+                                      queuedItems.first.song.songName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -507,7 +508,8 @@ class MusicPlayer extends ConsumerWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      _primaryArtistName(upcoming.first.song),
+                                      _primaryArtistName(
+                                          queuedItems.first.song),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(

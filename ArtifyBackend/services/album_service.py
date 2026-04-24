@@ -342,14 +342,24 @@ class AlbumService:
                         AlbumArtist(album=album, artist=artist, role=AlbumArtistRole.PRIMARY)
                     )
 
-            if "song_ids" in update_dict:
-                song_ids = AlbumService._normalize_ids(update_dict["song_ids"])
+            if "song_links" in update_dict:
+                song_links = update_dict["song_links"] or []
+                song_ids = AlbumService._normalize_ids(
+                    [link["song_id"] for link in song_links]
+                )
                 song_map = AlbumService._resolve_songs(db, song_ids)
+            
                 album.album_song_links.clear()
-                for index, song_id in enumerate(song_ids):
-                    # FIX: id non passato. FIX: total_tracks rimosso.
+                db.flush()  # Evita IntegrityError su UniqueConstraint(album_id, song_id)
+                            # quando riordinamenti coinvolgono le stesse song già linkate.
+            
+                for link in song_links:
                     album.album_song_links.append(
-                        AlbumSong(album=album, song=song_map[song_id], track_number=index + 1)
+                        AlbumSong(
+                            album=album,
+                            song=song_map[link["song_id"]],
+                            track_number=link["track_number"],
+                        )
                     )
 
             db.commit()

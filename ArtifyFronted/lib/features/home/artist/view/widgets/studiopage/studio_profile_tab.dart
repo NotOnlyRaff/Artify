@@ -1,6 +1,8 @@
 import 'package:client/core/utils.dart';
 import 'package:client/features/auth/models/user_model.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
+import 'package:client/features/home/artist/view/pages/artist_album_edit_page.dart';
+import 'package:client/features/home/artist/view/pages/artist_song_edit_page.dart';
 import 'package:client/features/home/artist/view/widgets/studiopage/artist_studio_shared.dart';
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -307,6 +309,16 @@ class _StudioProfileTabState extends ConsumerState<StudioProfileTab> {
                                   final songRef = artist.songs[index];
                                   return _SongCatalogTile(
                                     songRef: songRef,
+                                    onEdit: () async {
+                                      await Navigator.of(context).push<bool>(
+                                        MaterialPageRoute(
+                                          builder: (_) => ArtistSongEditPage(
+                                            studioArtist: artist,
+                                            songId: songRef.songId,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                     onDelete: widget.onDeleteSong == null
                                         ? null
                                         : () async {
@@ -336,6 +348,16 @@ class _StudioProfileTabState extends ConsumerState<StudioProfileTab> {
                                   final albumRef = artist.albums[index];
                                   return _AlbumCatalogTile(
                                     albumRef: albumRef,
+                                    onEdit: () async {
+                                      await Navigator.of(context).push<bool>(
+                                        MaterialPageRoute(
+                                          builder: (_) => ArtistAlbumEditPage(
+                                            studioArtist: artist,
+                                            albumId: albumRef.albumId,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                     onDelete: widget.onDeleteAlbum == null
                                         ? null
                                         : () async {
@@ -415,9 +437,14 @@ class _CatalogListSection extends StatelessWidget {
 /// I campi necessari per la tile (nome, thumbnail, id) sono presenti in ArtistSongRef.
 class _SongCatalogTile extends StatelessWidget {
   final ArtistSongRef songRef;
+  final Future<void> Function()? onEdit;
   final Future<void> Function()? onDelete;
 
-  const _SongCatalogTile({required this.songRef, required this.onDelete});
+  const _SongCatalogTile({
+    required this.songRef,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -454,11 +481,20 @@ class _SongCatalogTile extends StatelessWidget {
                   color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ),
+          if (onEdit != null)
+            IconButton(
+              tooltip: 'Edit track',
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+            ),
           if (onDelete != null)
             IconButton(
+              tooltip: 'Delete track',
               onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline_rounded,
-                  color: Colors.white70),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.white70,
+              ),
             ),
         ],
       ),
@@ -470,9 +506,14 @@ class _SongCatalogTile extends StatelessWidget {
 /// I campi necessari per la tile (titolo, cover, id) sono presenti in ArtistAlbumRef.
 class _AlbumCatalogTile extends StatelessWidget {
   final ArtistAlbumRef albumRef;
+  final Future<void> Function()? onEdit;
   final Future<void> Function()? onDelete;
 
-  const _AlbumCatalogTile({required this.albumRef, required this.onDelete});
+  const _AlbumCatalogTile({
+    required this.albumRef,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -509,11 +550,20 @@ class _AlbumCatalogTile extends StatelessWidget {
                   color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ),
+          if (onEdit != null)
+            IconButton(
+              tooltip: 'Edit album',
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+            ),
           if (onDelete != null)
             IconButton(
+              tooltip: 'Delete album',
               onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline_rounded,
-                  color: Colors.white70),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.white70,
+              ),
             ),
         ],
       ),

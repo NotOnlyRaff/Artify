@@ -54,11 +54,11 @@ class PlaybackQueuePage extends ConsumerWidget {
     final songNotifier = ref.read(currentSongNotifierProvider.notifier);
 
     final currentItem = queueState.currentItem;
-    final currentIndex = queueState.currentIndex ?? 0;
-    final previousItems = queueState.previousItems;
-    final upcomingItems = queueState.upcomingItems;
+    final previousItems = queueState.recentPreviousItems;
+    final queuedEntries = queueState.queuedEntries;
     final queuedCount = queueState.queuedCount;
     final historyCount = queueState.historyCount;
+    final historyOverflowCount = queueState.historyOverflowCount;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -79,12 +79,9 @@ class PlaybackQueuePage extends ConsumerWidget {
                             queuedCount: queuedCount,
                             historyCount: historyCount,
                             onBack: () => Navigator.of(context).pop(),
-                            onClear: () async {
-                              await queueController.clearQueue();
-                              if (context.mounted) {
-                                Navigator.of(context).pop();
-                              }
-                            },
+                            onClear: queuedCount > 0
+                                ? () => queueController.clearQueuedItems()
+                                : null,
                           ),
                         ),
                         const SliverToBoxAdapter(child: SizedBox(height: 18)),
@@ -111,9 +108,9 @@ class PlaybackQueuePage extends ConsumerWidget {
                             artistName: _artistName(currentItem),
                             sourceLabel: _sourceLabel(currentItem),
                             isPlaying: songNotifier.isPlaying,
-                            upcomingCount: upcomingItems.length,
+                            upcomingCount: queuedCount,
                             onPlayPause: () => songNotifier.playPause(),
-                            onNext: upcomingItems.isNotEmpty
+                            onNext: queueState.hasNextItem
                                 ? () => queueController.skipToNext()
                                 : null,
                           ),
@@ -125,51 +122,55 @@ class PlaybackQueuePage extends ConsumerWidget {
                             eyebrow: 'NEXT',
                             title: 'Up next',
                             subtitle: queuedCount == 0
-                                ? 'There are no tracks waiting after the current one.'
+                                ? 'There are no tracks manually queued right now.'
                                 : '$queuedCount track${queuedCount == 1 ? '' : 's'} lined up after the current song.',
-                            child: upcomingItems.isEmpty
+                            child: queuedEntries.isEmpty
                                 ? const _InlineMessage(
                                     icon: Icons.queue_music_rounded,
-                                    title: 'Queue complete',
+                                    title: 'Manual queue empty',
                                     subtitle:
-                                        'Add more tracks with Play next or Add to queue.',
+                                        'Use Play next or Add to queue to place tracks here.',
                                   )
                                 : Column(
-                                    children: upcomingItems.asMap().entries.map(
+                                    children: queuedEntries.asMap().entries.map(
                                       (entry) {
+                                        final queuedEntry = entry.value;
                                         final absoluteIndex =
-                                            currentIndex + 1 + entry.key;
-                                        final item = entry.value;
+                                            queuedEntry.absoluteIndex;
+                                        final item = queuedEntry.item;
+                                        final isLastEntry = entry.key ==
+                                            queuedEntries.length - 1;
 
                                         return Padding(
                                           padding: EdgeInsets.only(
-                                            bottom: entry.key ==
-                                                    upcomingItems.length - 1
-                                                ? 0
-                                                : 14,
+                                            bottom: isLastEntry ? 0 : 14,
                                           ),
                                           child: _UpcomingQueueCard(
                                             item: item,
-                                            queuePosition: entry.key + 1,
+                                            queuePosition:
+                                                queuedEntry.queuePosition,
                                             isFirstUp: entry.key == 0,
                                             artistName: _artistName(item),
                                             sourceLabel: _sourceLabel(item),
                                             onTap: () => queueController
                                                 .skipToIndex(absoluteIndex),
-                                            onMoveUp:
-                                                absoluteIndex > currentIndex + 1
-                                                    ? () => queueController
-                                                            .moveQueueItem(
-                                                          absoluteIndex,
-                                                          absoluteIndex - 1,
-                                                        )
-                                                    : null,
-                                            onMoveDown: absoluteIndex <
-                                                    queueState.items.length - 1
+                                            onMoveUp: entry.key > 0
                                                 ? () => queueController
                                                         .moveQueueItem(
                                                       absoluteIndex,
-                                                      absoluteIndex + 1,
+                                                      queuedEntries[
+                                                              entry.key - 1]
+                                                          .absoluteIndex,
+                                                    )
+                                                : null,
+                                            onMoveDown: entry.key <
+                                                    queuedEntries.length - 1
+                                                ? () => queueController
+                                                        .moveQueueItem(
+                                                      absoluteIndex,
+                                                      queuedEntries[
+                                                              entry.key + 1]
+                                                          .absoluteIndex,
                                                     )
                                                 : null,
                                             onRemove: () =>
@@ -190,8 +191,9 @@ class PlaybackQueuePage extends ConsumerWidget {
                               icon: Icons.history_rounded,
                               eyebrow: 'BEFORE',
                               title: 'Played in this session',
-                              subtitle:
-                                  '${previousItems.length} track${previousItems.length == 1 ? '' : 's'} came before the current one in this session.',
+                              subtitle: historyOverflowCount > 0
+                                  ? 'Showing the latest ${previousItems.length} of $historyCount tracks played in this session. Re-queue them without touching the current queue.'
+                                  : '${previousItems.length} track${previousItems.length == 1 ? '' : 's'} played earlier in this session. Re-queue them without touching the current queue.',
                               child: Column(
                                 children: previousItems.asMap().entries.map(
                                   (entry) {
@@ -207,9 +209,17 @@ class PlaybackQueuePage extends ConsumerWidget {
                                         item: item,
                                         artistName: _artistName(item),
                                         sourceLabel: _sourceLabel(item),
-                                        onTap: () =>
-                                            queueController.skipToIndex(
-                                          entry.key,
+                                        onPlayNext: () =>
+                                            queueController.playNext(
+                                          item.song,
+                                          sourceType: item.sourceType,
+                                          sourceId: item.sourceId,
+                                        ),
+                                        onAddToQueue: () =>
+                                            queueController.addToQueue(
+                                          item.song,
+                                          sourceType: item.sourceType,
+                                          sourceId: item.sourceId,
                                         ),
                                       ),
                                     );
@@ -233,7 +243,7 @@ class _QueueHeader extends StatelessWidget {
   final int queuedCount;
   final int historyCount;
   final VoidCallback onBack;
-  final VoidCallback onClear;
+  final VoidCallback? onClear;
 
   const _QueueHeader({
     required this.queuedCount,
@@ -292,7 +302,7 @@ class _QueueHeader extends StatelessWidget {
         ),
         _PillActionButton(
           icon: Icons.delete_sweep_rounded,
-          label: 'Clear',
+          label: 'Clear queued',
           onTap: onClear,
         ),
       ],
@@ -847,77 +857,79 @@ class _PastQueueCard extends StatelessWidget {
   final PlaybackQueueItem item;
   final String artistName;
   final String sourceLabel;
-  final VoidCallback onTap;
+  final VoidCallback onPlayNext;
+  final VoidCallback onAddToQueue;
 
   const _PastQueueCard({
     required this.item,
     required this.artistName,
     required this.sourceLabel,
-    required this.onTap,
+    required this.onPlayNext,
+    required this.onAddToQueue,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(0.035),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.035),
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white.withOpacity(0.06),
-                ),
-                child: const Icon(
-                  Icons.history_toggle_off_rounded,
-                  color: Colors.white38,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.song.songName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$artistName - $sourceLabel',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.replay_rounded,
-                color: Colors.white30,
-                size: 18,
-              ),
-            ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withOpacity(0.06),
+            ),
+            child: const Icon(
+              Icons.history_toggle_off_rounded,
+              color: Colors.white38,
+              size: 20,
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.song.songName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$artistName - $sourceLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _MiniQueueAction(
+            icon: Icons.queue_play_next_rounded,
+            onTap: onPlayNext,
+          ),
+          const SizedBox(width: 8),
+          _MiniQueueAction(
+            icon: Icons.playlist_add_rounded,
+            onTap: onAddToQueue,
+          ),
+        ],
       ),
     );
   }
@@ -1089,7 +1101,7 @@ class _RoundHeaderButton extends StatelessWidget {
 class _PillActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _PillActionButton({
     required this.icon,
@@ -1099,8 +1111,10 @@ class _PillActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isEnabled = onTap != null;
+
     return Material(
-      color: Colors.white.withOpacity(0.06),
+      color: Colors.white.withOpacity(isEnabled ? 0.06 : 0.03),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
@@ -1112,14 +1126,14 @@ class _PillActionButton extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: Colors.white70,
+                color: isEnabled ? Colors.white70 : Colors.white24,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isEnabled ? Colors.white : Colors.white24,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),

@@ -1,4 +1,5 @@
 import 'package:client/core/theme/app_pallete.dart';
+import 'package:client/core/utils.dart';
 import 'package:client/core/widgets/artify_section_title.dart';
 import 'package:client/features/home/admin/view/widgets/uploadAlbum/new_track_sheet.dart';
 import 'package:client/features/home/models/song_artist_model.dart';
@@ -8,30 +9,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// ───────────────────────────── MODEL LOCALI ─────────────────────────────
-
-/// Traccia locale dentro l'UploadAlbum.
-/// L'audio è rappresentato da una STRINGA songUrl (path/blob/url).
 class AlbumTrackLocal {
   final String localId;
   final String title;
   final String composer;
-  final String songUrl;
+  final PickedMedia audio;
   final String? genre;
   final String? mood;
   final String? lyrics;
-
-  /// artist_ids (dal DB) che partecipano al brano
   final List<String> artistIds;
-
-  /// ruolo per ogni artista (stesso enum usato nel resto del progetto)
   final Map<String, SongArtistRole> artistRoles;
 
-  AlbumTrackLocal({
+  const AlbumTrackLocal({
     required this.localId,
     required this.title,
     required this.composer,
-    required this.songUrl,
+    required this.audio,
     this.genre,
     this.mood,
     this.lyrics,
@@ -40,9 +33,6 @@ class AlbumTrackLocal {
   });
 }
 
-/// Entry generica della tracklist dell’album:
-/// - SongModel esistente (dal catalogo)
-/// - traccia locale (AlbumTrackLocal)
 class AlbumTrackEntry {
   final SongModel? existingSong;
   final AlbumTrackLocal? local;
@@ -58,37 +48,46 @@ class AlbumTrackEntry {
 
   String get displaySubtitle {
     if (existingSong != null) {
-      return existingSong!.genre ?? 'Unknown genre';
+      final artistNames = existingSong!.artists
+          .map((artist) => artist.artistName)
+          .whereType<String>()
+          .where((name) => name.trim().isNotEmpty)
+          .join(', ');
+      return artistNames.isNotEmpty
+          ? artistNames
+          : (existingSong!.genre ?? 'Catalog track');
     }
-    if (local != null &&
-        local!.genre != null &&
-        local!.genre!.trim().isNotEmpty) {
-      return local!.genre!;
+
+    if (local != null) {
+      final details = <String>[];
+      if (local!.composer.trim().isNotEmpty) {
+        details.add('Composer: ${local!.composer.trim()}');
+      }
+      if (local!.genre?.trim().isNotEmpty == true) {
+        details.add(local!.genre!.trim());
+      }
+      if (local!.artistIds.isNotEmpty) {
+        details.add(
+          '${local!.artistIds.length} linked artist${local!.artistIds.length == 1 ? '' : 's'}',
+        );
+      }
+      if (details.isNotEmpty) {
+        return details.join(' - ');
+      }
     }
-    return 'Local track';
+
+    return 'Local draft';
   }
 
   String? get thumbnailUrl => existingSong?.thumbnailUrl;
 }
 
-/// ───────────────────────────── TRACKS TAB ─────────────────────────────
-
 class TracksTab extends ConsumerWidget {
   final List<AlbumTrackEntry> tracks;
-
-  /// Aggiunge una track esistente dal catalogo
   final ValueChanged<SongModel> onAddExistingTrack;
-
-  /// Aggiunge una track locale (creata nel bottom sheet)
   final ValueChanged<AlbumTrackLocal> onAddLocalTrack;
-
-  /// Rimuove qualunque entry (song esistente o locale)
   final ValueChanged<AlbumTrackEntry> onRemoveTrack;
-
-  /// Riordina le entry
   final void Function(int fromIndex, int toIndex) onMoveTrack;
-
-  // Search
   final TextEditingController trackSearchController;
   final String trackSearchQuery;
   final ValueChanged<String> onTrackQueryChanged;
@@ -107,38 +106,23 @@ class TracksTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final trimmedQuery = trackSearchQuery.trim().toLowerCase();
-    final bool enableSearch = trimmedQuery.length >= 2;
-
     final songsAsync = ref.watch(getAllSongsProvider);
-
-    final totalTracks = tracks.length;
+    final trimmedQuery = trackSearchQuery.trim().toLowerCase();
+    final enableSearch = trimmedQuery.length >= 2;
     final existingSongIds = tracks
-        .where((t) => t.existingSong != null)
-        .map((t) => t.existingSong!.id)
+        .where((entry) => entry.existingSong != null)
+        .map((entry) => entry.existingSong!.id)
         .toSet();
-
-    // DEBUG: stato della tracklist dentro il tab
-    debugPrint('[TracksTab] build – totalTracks=$totalTracks');
-    for (var i = 0; i < tracks.length; i++) {
-      final t = tracks[i];
-      debugPrint('[TracksTab] [TRACK $i] existing=${t.existingSong != null} '
-          'local=${t.local != null} '
-          'existingId=${t.existingSong?.id} '
-          'localId=${t.local?.localId} '
-          'title=${t.displayTitle}');
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // HEADER ----------------------------------------------------------------
         Row(
           children: [
             const ArtifySectionTitle('Tracklist'),
             const Spacer(),
             Text(
-              '$totalTracks track${totalTracks == 1 ? '' : 's'}',
+              '${tracks.length} track${tracks.length == 1 ? '' : 's'}',
               style: GoogleFonts.plusJakartaSans(
                 color: Colors.white54,
                 fontSize: 11,
@@ -147,199 +131,47 @@ class TracksTab extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 10),
-
-        // Top row: hint + "New track" button
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
-                totalTracks == 0
-                    ? 'Start by creating a brand new song or linking existing tracks.'
-                    : 'Reorder, remove or add more tracks. The order here defines the album sequence.',
+                tracks.isEmpty
+                    ? 'Create brand new songs or attach tracks already present in the catalog.'
+                    : 'The order here becomes the real album sequence. Local drafts are uploaded as songs before the album is created.',
                 style: GoogleFonts.plusJakartaSans(
                   color: Colors.white38,
                   fontSize: 11,
+                  height: 1.45,
                 ),
               ),
             ),
             const SizedBox(width: 12),
-            _NewTrackButton(
-              onCreated: (localTrack) {
-                onAddLocalTrack(localTrack);
-              },
-            ),
+            _NewTrackButton(onCreated: onAddLocalTrack),
           ],
         ),
-
         const SizedBox(height: 18),
-
-        // TRACKLIST CORRENTE ----------------------------------------------------
-        if (totalTracks == 0)
-          Text(
-            'No tracks added yet. The album will be created without a tracklist unless you link or create songs.',
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white38,
-              fontSize: 11,
-            ),
-          )
+        if (tracks.isEmpty)
+          _EmptyTrackState()
         else
           Column(
-            children: List.generate(tracks.length, (index) {
-              final entry = tracks[index];
-              final isLocal = entry.isLocal;
-
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white.withOpacity(0.03),
-                  border: Border.all(
-                    color: isLocal
-                        ? Pallete.gradient2.withOpacity(0.5)
-                        : Colors.white.withOpacity(0.12),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      (index + 1).toString().padLeft(2, '0'),
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white54,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: entry.thumbnailUrl != null
-                          ? Image.network(
-                              entry.thumbnailUrl!,
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              width: 40,
-                              height: 40,
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF811F1A),
-                                    Color(0xFF4B39EF),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.music_note_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  entry.displayTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              if (isLocal) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: Pallete.gradient2.withOpacity(0.3),
-                                  ),
-                                  child: Text(
-                                    'Local',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            entry.displaySubtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              color: Colors.white54,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Column(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_upward_rounded,
-                            size: 18,
-                            color: Colors.white70,
-                          ),
-                          onPressed: index == 0
-                              ? null
-                              : () => onMoveTrack(index, index - 1),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_downward_rounded,
-                            size: 18,
-                            color: Colors.white70,
-                          ),
-                          onPressed: index == tracks.length - 1
-                              ? null
-                              : () => onMoveTrack(index, index + 1),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        size: 18,
-                        color: Colors.white54,
-                      ),
-                      onPressed: () => onRemoveTrack(entry),
-                    ),
-                  ],
-                ),
-              );
-            }),
+            children: List.generate(
+              tracks.length,
+              (index) => _TrackRow(
+                entry: tracks[index],
+                index: index,
+                isFirst: index == 0,
+                isLast: index == tracks.length - 1,
+                onMoveUp:
+                    index == 0 ? null : () => onMoveTrack(index, index - 1),
+                onMoveDown: index == tracks.length - 1
+                    ? null
+                    : () => onMoveTrack(index, index + 1),
+                onRemove: () => onRemoveTrack(tracks[index]),
+              ),
+            ),
           ),
-
         const SizedBox(height: 24),
-
-        // Divider "or link existing tracks"
         Row(
           children: [
             Expanded(
@@ -350,7 +182,7 @@ class TracksTab extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Text(
-              'or link existing tracks',
+              'link existing tracks',
               style: GoogleFonts.plusJakartaSans(
                 color: Colors.white38,
                 fontSize: 11,
@@ -365,10 +197,7 @@ class TracksTab extends ConsumerWidget {
             ),
           ],
         ),
-
         const SizedBox(height: 16),
-
-        // SEARCH LIBRARY --------------------------------------------------------
         Text(
           'Search & add tracks from library',
           style: GoogleFonts.plusJakartaSans(
@@ -378,7 +207,6 @@ class TracksTab extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 6),
-
         TextField(
           controller: trackSearchController,
           onChanged: onTrackQueryChanged,
@@ -387,7 +215,7 @@ class TracksTab extends ConsumerWidget {
             fontSize: 13,
           ),
           decoration: InputDecoration(
-            hintText: 'Search songs by title...',
+            hintText: 'Search songs by title or artist...',
             hintStyle: GoogleFonts.plusJakartaSans(
               color: Colors.white54,
               fontSize: 13,
@@ -419,7 +247,7 @@ class TracksTab extends ConsumerWidget {
         const SizedBox(height: 6),
         Text(
           enableSearch
-              ? 'Type to search tracks already in your catalog.'
+              ? 'Tracks already linked to this album are automatically hidden.'
               : 'Type at least 2 characters to search tracks.',
           style: GoogleFonts.plusJakartaSans(
             color: Colors.white38,
@@ -427,18 +255,21 @@ class TracksTab extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 8),
-
         if (enableSearch)
           songsAsync.when(
             data: (songs) {
               final filtered = songs
-                  .where(
-                    (s) =>
-                        s.songName.toLowerCase().contains(trimmedQuery),
-                  )
-                  .where(
-                    (s) => !existingSongIds.contains(s.id),
-                  )
+                  .where((song) {
+                    final titleMatch =
+                        song.songName.toLowerCase().contains(trimmedQuery);
+                    final artistMatch = song.artists.any(
+                      (artist) => (artist.artistName ?? '')
+                          .toLowerCase()
+                          .contains(trimmedQuery),
+                    );
+                    return titleMatch || artistMatch;
+                  })
+                  .where((song) => !existingSongIds.contains(song.id))
                   .take(8)
                   .toList();
 
@@ -453,50 +284,14 @@ class TracksTab extends ConsumerWidget {
               }
 
               return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: filtered.map((song) {
-                  return InkWell(
-                    onTap: () => onAddExistingTrack(song),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(6),
-                              color: Colors.white.withOpacity(0.06),
-                            ),
-                            child: const Icon(
-                              Icons.music_note_rounded,
-                              size: 16,
-                              color: Colors.white70,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              song.songName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.plusJakartaSans(
-                                color: Colors.white,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.add_rounded,
-                            size: 18,
-                            color: Colors.white70,
-                          ),
-                        ],
+                children: filtered
+                    .map(
+                      (song) => _LibraryTrackRow(
+                        song: song,
+                        onAdd: () => onAddExistingTrack(song),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    )
+                    .toList(growable: false),
               );
             },
             loading: () => const Padding(
@@ -510,8 +305,8 @@ class TracksTab extends ConsumerWidget {
                 ),
               ),
             ),
-            error: (e, _) => Text(
-              e.toString(),
+            error: (error, _) => Text(
+              error.toString(),
               style: GoogleFonts.plusJakartaSans(
                 color: Colors.redAccent,
                 fontSize: 11,
@@ -523,7 +318,326 @@ class TracksTab extends ConsumerWidget {
   }
 }
 
-/// ───────────────────────── NEW TRACK BUTTON ─────────────────────────
+class _TrackRow extends StatelessWidget {
+  final AlbumTrackEntry entry;
+  final int index;
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
+  final VoidCallback onRemove;
+
+  const _TrackRow({
+    required this.entry,
+    required this.index,
+    required this.isFirst,
+    required this.isLast,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLocal = entry.isLocal;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withOpacity(0.03),
+        border: Border.all(
+          color: isLocal
+              ? Pallete.gradient2.withOpacity(0.45)
+              : Colors.white.withOpacity(0.12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            (index + 1).toString().padLeft(2, '0'),
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white54,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: entry.thumbnailUrl != null
+                ? Image.network(
+                    entry.thumbnailUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        _TrackPlaceholder(isLocal: isLocal),
+                  )
+                : _TrackPlaceholder(isLocal: isLocal),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry.displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _TrackKindChip(isLocal: isLocal),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  entry.displaySubtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white54,
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_upward_rounded,
+                    size: 18, color: Colors.white70),
+                onPressed: onMoveUp,
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_downward_rounded,
+                    size: 18, color: Colors.white70),
+                onPressed: onMoveDown,
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: Colors.white54,
+            ),
+            onPressed: onRemove,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackPlaceholder extends StatelessWidget {
+  final bool isLocal;
+
+  const _TrackPlaceholder({required this.isLocal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isLocal
+              ? const [Color(0xFFF97316), Color(0xFF8B5CF6)]
+              : const [Color(0xFF811F1A), Color(0xFF4B39EF)],
+        ),
+      ),
+      child: Icon(
+        isLocal ? Icons.upload_file_rounded : Icons.music_note_rounded,
+        color: Colors.white,
+        size: 20,
+      ),
+    );
+  }
+}
+
+class _TrackKindChip extends StatelessWidget {
+  final bool isLocal;
+
+  const _TrackKindChip({required this.isLocal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: isLocal
+            ? Pallete.gradient2.withOpacity(0.26)
+            : Colors.white.withOpacity(0.08),
+      ),
+      child: Text(
+        isLocal ? 'Upload' : 'Library',
+        style: GoogleFonts.plusJakartaSans(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryTrackRow extends StatelessWidget {
+  final SongModel song;
+  final VoidCallback onAdd;
+
+  const _LibraryTrackRow({
+    required this.song,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = song.artists
+        .map((artist) => artist.artistName)
+        .whereType<String>()
+        .where((name) => name.trim().isNotEmpty)
+        .join(', ');
+
+    return InkWell(
+      onTap: onAdd,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.white.withOpacity(0.025),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: song.thumbnailUrl != null
+                  ? Image.network(
+                      song.thumbnailUrl!,
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          _TrackPlaceholder(isLocal: false),
+                    )
+                  : const _TrackPlaceholder(isLocal: false),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    song.songName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white54,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(
+              Icons.add_rounded,
+              size: 18,
+              color: Colors.white70,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyTrackState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withOpacity(0.03),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.06),
+                ),
+                child: const Icon(
+                  Icons.queue_music_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'No tracks added yet',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'You can mix fresh uploads and catalog tracks. Local drafts will be uploaded first, then linked into the final album in this exact order.',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white54,
+              fontSize: 11.5,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _NewTrackButton extends StatelessWidget {
   final ValueChanged<AlbumTrackLocal> onCreated;
@@ -552,18 +666,14 @@ class _NewTrackButton extends StatelessWidget {
                 bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
               child: NewTrackSheet(
-                onCreated: (t) => Navigator.of(ctx).pop(t),
+                onCreated: (track) => Navigator.of(ctx).pop(track),
               ),
             );
           },
         );
 
         if (localTrack != null) {
-          debugPrint('[TracksTab] _NewTrackButton -> got localTrack '
-              'localId=${localTrack.localId}, title=${localTrack.title}');
           onCreated(localTrack);
-        } else {
-          debugPrint('[TracksTab] _NewTrackButton -> user cancelled');
         }
       },
       style: TextButton.styleFrom(

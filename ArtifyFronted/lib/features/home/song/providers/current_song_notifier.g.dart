@@ -7,12 +7,12 @@ part of 'current_song_notifier.dart';
 // **************************************************************************
 
 String _$currentSongNotifierHash() =>
-    r'97fcc7f1abb3417f59b26935cfdc50b0381c0874';
+    r'c318f9d5044effc0daba19acc9539960454c9f5e';
 
 /// See also [CurrentSongNotifier].
 @ProviderFor(CurrentSongNotifier)
 final currentSongNotifierProvider =
-    NotifierProvider<CurrentSongNotifier, SongModel?>.internal(
+    NotifierProvider<CurrentSongNotifier, CurrentSongState>.internal(
   CurrentSongNotifier.new,
   name: r'currentSongNotifierProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -22,6 +22,6 @@ final currentSongNotifierProvider =
   allTransitiveDependencies: null,
 );
 
-typedef _$CurrentSongNotifier = Notifier<SongModel?>;
+typedef _$CurrentSongNotifier = Notifier<CurrentSongState>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

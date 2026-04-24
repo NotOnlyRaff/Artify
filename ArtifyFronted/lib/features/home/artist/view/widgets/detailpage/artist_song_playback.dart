@@ -1,6 +1,7 @@
 import 'package:client/core/utils.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/song/model/playback_queue_state.dart';
+import 'package:client/features/home/song/providers/playback_queue_controller.dart';
 import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ Future<bool> playArtistSongRef({
   required WidgetRef ref,
   required ArtistSongRef songRef,
   List<ArtistSongRef>? queueRefs,
+  String? sourceId,
 }) async {
   final songId = songRef.songId.trim();
   if (songId.isEmpty) {
@@ -38,6 +40,7 @@ Future<bool> playArtistSongRef({
         songs: songs,
         startIndex: index,
         sourceType: PlaybackSourceType.artist,
+        sourceId: sourceId,
       );
     } else {
       final song = songs.isNotEmpty
@@ -51,6 +54,7 @@ Future<bool> playArtistSongRef({
         ref: ref,
         song: song,
         sourceType: PlaybackSourceType.artist,
+        sourceId: sourceId,
       );
     }
     return true;
@@ -63,6 +67,24 @@ Future<bool> playArtistSongRef({
     }
     return false;
   }
+}
+
+Future<void> queueArtistSongRef({
+  required WidgetRef ref,
+  required ArtistSongRef songRef,
+  String? sourceId,
+}) async {
+  final songId = songRef.songId.trim();
+  if (songId.isEmpty) {
+    throw Exception('This track is missing a valid id.');
+  }
+
+  final song = await ref.read(getSongProvider(songId).future);
+  await ref.read(playbackQueueControllerProvider.notifier).addToQueue(
+        song,
+        sourceType: PlaybackSourceType.artist,
+        sourceId: sourceId,
+      );
 }
 
 String _errorMessage(Object error) {

@@ -9,10 +9,46 @@ from models.albumSong import AlbumSong
 from models.favorite import Favorite
 from models.artist import Artist
 from models.user import User
-from schemas.song_schema import SongCreate
+from schemas.song_schema import SongCreate, SongUpdate
 
 
 class SongService:
+
+    @staticmethod
+    def _resolve_artist_map(db: Session, artist_ids: list[str]) -> dict[str, Artist]:
+        if not artist_ids:
+            return {}
+
+        artists = db.query(Artist).filter(Artist.id.in_(artist_ids)).all()
+        artist_map = {artist.id: artist for artist in artists}
+        missing = [artist_id for artist_id in artist_ids if artist_id not in artist_map]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Artist(s) not found: {missing}",
+            )
+        return artist_map
+
+    @staticmethod
+    def _assert_song_ownership(song: Song, current_user: User) -> None:
+        if current_user.role == UserRole.ADMIN:
+            return
+
+        if current_user.role != UserRole.ARTIST or not current_user.artist_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to manage this song",
+            )
+
+        is_artist_owner = any(
+            link.artist_id == current_user.artist_id
+            for link in song.song_artist_links
+        )
+        if not is_artist_owner:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to manage this song",
+            )
 
     # ------------------------------------------------------------------ #
     #  Upload                                                             #
@@ -216,6 +252,88 @@ class SongService:
         return song
 
     # ------------------------------------------------------------------ #
+    #  Aggiornamento                                                      #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def update_song(
+        db: Session,
+        song_id: str,
+        payload: SongUpdate,
+        current_user: User,
+    ) -> Song:
+        song = (
+            db.query(Song)
+            .options(
+                joinedload(Song.song_artist_links).joinedload(SongArtist.artist),
+                joinedload(Song.album_song_links).joinedload(AlbumSong.album),
+            )
+            .filter(Song.id == song_id)
+            .first()
+        )
+        if not song:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Song not found",
+            )
+
+        SongService._assert_song_ownership(song, current_user)
+
+        update_dict = payload.model_dump(exclude_unset=True)
+        artist_links = update_dict.pop("artist_links", None)
+
+        try:
+            for field in (
+                "song_name",
+                "song_url",
+                "thumbnail_url",
+                "release_date",
+                "composer_id",
+                "composer_name",
+                "producer_id",
+                "producer_name",
+                "genre",
+                "lyrics",
+                "mood",
+                "duration_seconds",
+            ):
+                if field in update_dict:
+                    setattr(song, field, update_dict[field])
+
+            if artist_links is not None:
+                if not artist_links:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="A song must have at least one artist",
+                    )
+
+                artist_ids = list({link["artist_id"] for link in artist_links})
+                SongService._resolve_artist_map(db, artist_ids)
+
+                song.song_artist_links.clear()
+                for link in artist_links:
+                    song.song_artist_links.append(
+                        SongArtist(
+                            song_id=song.id,
+                            artist_id=link["artist_id"],
+                            role=link["role"],
+                        )
+                    )
+
+            db.commit()
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Song update failed: {str(e)}",
+            )
+
+        return SongService.get_song_by_id(db=db, song_id=song_id)
+
+    # ------------------------------------------------------------------ #
     #  Eliminazione                                                       #
     # ------------------------------------------------------------------ #
 
@@ -233,16 +351,7 @@ class SongService:
                 detail="Song not found",
             )
 
-        is_admin = current_user.role == UserRole.ADMIN
-        is_artist_owner = any(
-            link.artist_id == current_user.artist_id
-            for link in song.song_artist_links
-        )
-        if not is_admin and not is_artist_owner:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to delete this song",
-            )
+        SongService._assert_song_ownership(song, current_user)
 
         try:
             db.delete(song)

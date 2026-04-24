@@ -202,7 +202,7 @@ class _GetSongProviderElement
   String get songId => (origin as GetSongProvider).songId;
 }
 
-String _$songViewModelHash() => r'eb3d960060bab46bdb6b4a14055f977744cf7366';
+String _$songViewModelHash() => r'14f5cf85f1da5daef5c90a61709b13aeade4d9cd';
 
 /// ───────────────── VIEWMODEL CANZONI ─────────────────
 ///

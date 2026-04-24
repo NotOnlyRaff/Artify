@@ -11,26 +11,96 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'current_song_notifier.g.dart';
 
+// ---------------------------------------------------------------------------
+// Stato unificato — song + isPlaying nello stesso oggetto Riverpod.
+// ---------------------------------------------------------------------------
+class CurrentSongState {
+  final SongModel? song;
+  final bool isPlaying;
+
+  const CurrentSongState({this.song, this.isPlaying = false});
+
+  CurrentSongState copyWith({
+    SongModel? song,
+    bool? isPlaying,
+    bool clearSong = false,
+  }) {
+    return CurrentSongState(
+      song: clearSong ? null : (song ?? this.song),
+      isPlaying: isPlaying ?? this.isPlaying,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CurrentSongState &&
+          song?.id == other.song?.id &&
+          isPlaying == other.isPlaying;
+
+  @override
+  int get hashCode => Object.hash(song?.id, isPlaying);
+}
+
+// ---------------------------------------------------------------------------
+// Notifier
+// ---------------------------------------------------------------------------
 @Riverpod(keepAlive: true)
 class CurrentSongNotifier extends _$CurrentSongNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
+
+  // IMPORTANTE: lista MUTABILE. `const []` su web (dart2js) causa il crash
+  //   Unsupported operation: set length
+  // quando `just_audio` prova a fare clear()/length=0 sulla lista interna.
+  final ConcatenatingAudioSource _queueSource = ConcatenatingAudioSource(
+    children: <AudioSource>[],
+    useLazyPreparation: true,
+  );
 
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<PlayerException>? _playerErrorSub;
   StreamSubscription<int?>? _currentIndexSub;
 
-  bool isPlaying = false;
-  bool _listenersAttached = false;
-  bool _handlingTrackCompletion = false;
+  // Coda pura a catena di Future — zero race condition, zero flag sincroni.
+  Future<void> _mutationQueue = Future<void>.value();
+
   int _playRequestId = 0;
+  List<String> _loadedSequenceIds = const [];
+  bool _sourceInitialized = false;
+  bool _listenersAttached = false;
 
   AudioPlayer get audioPlayer => _audioPlayer;
+
+  // Getter di comodità usati dal queue controller (compat API).
+  bool get isPlaying => state.isPlaying;
+  bool get hasLoadedSequence => _sourceInitialized;
 
   SongLocalRepository get _songLocalRepository =>
       ref.read(songLocalRepositoryProvider);
 
+  void _triggerPlayDirect({String context = 'play'}) {
+    unawaited(
+      _audioPlayer.play().catchError((error, stackTrace) {
+        debugPrint(
+          '[CurrentSongNotifier] $context play() error: $error\n$stackTrace',
+        );
+        state = state.copyWith(isPlaying: false);
+      }),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mutation queue: ogni chiamata attende la precedente. Niente flag booleani
+  // sincroni, niente possibilità che due mutazioni partano in parallelo.
+  // ---------------------------------------------------------------------------
+  Future<T> _runPlayerMutation<T>(Future<T> Function() action) {
+    final result = _mutationQueue.then<T>((_) => action());
+    _mutationQueue = result.then<void>((_) {}, onError: (_) {});
+    return result;
+  }
+
   @override
-  SongModel? build() {
+  CurrentSongState build() {
     if (!_listenersAttached) {
       _listenersAttached = true;
       Future.microtask(() {
@@ -40,14 +110,14 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     }
 
     ref.onDispose(() async {
-      debugPrint('[CurrentSongNotifier] onDispose - dispose player');
+      debugPrint('[CurrentSongNotifier] onDispose');
       await _playerStateSub?.cancel();
       await _playerErrorSub?.cancel();
       await _currentIndexSub?.cancel();
       await _audioPlayer.dispose();
     });
 
-    return null;
+    return const CurrentSongState();
   }
 
   void _attachPlayerListeners() {
@@ -64,16 +134,9 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
         'processing=$processing, playing=$playing',
       );
 
-      isPlaying = playing && processing == ProcessingState.ready;
-
-      if (processing == ProcessingState.completed) {
-        unawaited(_handleTrackCompleted());
-        return;
-      }
-
-      final current = state;
-      if (current != null) {
-        state = current.copyWith();
+      final isNowPlaying = playing && processing != ProcessingState.completed;
+      if (state.isPlaying != isNowPlaying) {
+        state = state.copyWith(isPlaying: isNowPlaying);
       }
     });
 
@@ -85,6 +148,9 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // URL helpers
+  // ---------------------------------------------------------------------------
   MediaItem _buildMediaItem(SongModel song) {
     final artistName = song.artists.isNotEmpty
         ? (song.artists.first.artistName ?? 'Unknown artist')
@@ -109,9 +175,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     if (parsed == null) return trimmed;
 
     var uri = parsed;
-    if (uri.scheme == 'http') {
-      uri = uri.replace(scheme: 'https');
-    }
+    if (uri.scheme == 'http') uri = uri.replace(scheme: 'https');
 
     return uri.toString();
   }
@@ -128,16 +192,17 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
       return null;
     }
 
-    final alreadyTransformed =
-        path.contains('/video/upload/f_') || path.contains('/video/upload/q_');
-    if (alreadyTransformed) {
+    if (path.contains('/video/upload/f_') ||
+        path.contains('/video/upload/q_')) {
       return null;
     }
 
     final uploadIndex = path.indexOf(uploadSegment);
+    // FIX: aggiunto `/` finale. Prima produceva URL malformati tipo
+    // `/video/upload/f_mp3,q_autov1776985940/...` che Cloudinary non accetta.
     final transformedPath =
         '${path.substring(0, uploadIndex + uploadSegment.length)}'
-        'f_mp3,q_auto'
+        'f_mp3,q_auto/'
         '${path.substring(uploadIndex + uploadSegment.length)}';
 
     return uri.replace(path: transformedPath).toString();
@@ -148,10 +213,8 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     if (normalized.isEmpty) return const [];
 
     final candidates = <String>[normalized];
-    final cloudinaryFallback = _cloudinaryMp3FallbackUrl(normalized);
-    if (cloudinaryFallback != null && cloudinaryFallback != normalized) {
-      candidates.add(cloudinaryFallback);
-    }
+    final fallback = _cloudinaryMp3FallbackUrl(normalized);
+    if (fallback != null && fallback != normalized) candidates.add(fallback);
     return candidates;
   }
 
@@ -162,26 +225,17 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     );
   }
 
-  AudioSource _buildQueueSource(
+  List<AudioSource> _buildSequenceSources(
     List<SongModel> songs, {
     int? overrideIndex,
     String? overrideUrl,
   }) {
-    if (songs.length == 1) {
+    return songs.asMap().entries.map((entry) {
       return _buildSongSource(
-        songs.first,
-        playbackUrl: overrideIndex == 0 ? overrideUrl : null,
+        entry.value,
+        playbackUrl: entry.key == overrideIndex ? overrideUrl : null,
       );
-    }
-
-    return ConcatenatingAudioSource(
-      children: songs.asMap().entries.map((entry) {
-        return _buildSongSource(
-          entry.value,
-          playbackUrl: entry.key == overrideIndex ? overrideUrl : null,
-        );
-      }).toList(growable: false),
-    );
+    }).toList(growable: false);
   }
 
   LoopMode _loopModeFor(PlaybackRepeatMode mode) {
@@ -192,9 +246,20 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     };
   }
 
-  Future<void> applyRepeatMode(PlaybackRepeatMode mode) async {
-    await _audioPlayer.setLoopMode(_loopModeFor(mode));
+  Future<void> _applyRepeatModeDirect(PlaybackRepeatMode mode) =>
+      _audioPlayer.setLoopMode(_loopModeFor(mode));
+
+  bool _matchesLoadedSequence(List<SongModel> songs) {
+    if (!_sourceInitialized || songs.length != _loadedSequenceIds.length) {
+      return false;
+    }
+    for (var i = 0; i < songs.length; i++) {
+      if (_loadedSequenceIds[i] != songs[i].id) return false;
+    }
+    return true;
   }
+
+  bool _isStaleRequest(int requestId) => requestId != _playRequestId;
 
   void _handlePlayerQueueIndexChanged(int? index) {
     if (index == null) return;
@@ -202,9 +267,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     final queueState = ref.read(playbackQueueControllerProvider);
     if (queueState.items.isEmpty ||
         index < 0 ||
-        index >= queueState.items.length) {
-      return;
-    }
+        index >= queueState.items.length) return;
 
     final queueSong = queueState.items[index].song;
 
@@ -214,45 +277,61 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
 
     unawaited(_songLocalRepository.saveRecentlyPlayed(queueSong));
 
-    final current = state;
-    if (current == null || current.id != queueSong.id) {
-      state = queueSong.copyWith();
-      return;
+    if (state.song?.id != queueSong.id) {
+      state = state.copyWith(song: queueSong.copyWith());
     }
-
-    state = current.copyWith();
   }
 
-  bool _isStaleRequest(int requestId) => requestId != _playRequestId;
+  // ---------------------------------------------------------------------------
+  // Core loading
+  // ---------------------------------------------------------------------------
+  Future<void> _loadSequence({
+    required List<SongModel> songs,
+    required int initialIndex,
+    required Duration initialPosition,
+    required String playbackUrl,
+    required bool autoplay,
+    required int requestId,
+  }) async {
+    // clear() solo se c'è effettivamente qualcosa dentro — evita di toccare
+    // la lista interna in casi edge.
+    if (_queueSource.length > 0) {
+      await _queueSource.clear();
+    }
+    await _queueSource.addAll(
+      _buildSequenceSources(
+        songs,
+        overrideIndex: initialIndex,
+        overrideUrl: playbackUrl,
+      ),
+    );
+    _loadedSequenceIds = songs.map((s) => s.id).toList(growable: false);
+    _sourceInitialized = true;
 
-  Future<void> _handleTrackCompleted() async {
-    if (_handlingTrackCompletion) return;
-    _handlingTrackCompletion = true;
+    if (_isStaleRequest(requestId)) return;
 
-    try {
-      final advanced = await ref
-          .read(playbackQueueControllerProvider.notifier)
-          .handleTrackCompleted();
+    await _audioPlayer.setAudioSource(
+      _queueSource,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
 
-      if (advanced) return;
+    if (_isStaleRequest(requestId)) return;
 
-      debugPrint('[CurrentSongNotifier] track completed - resetting');
-      await _audioPlayer.seek(Duration.zero);
+    if (autoplay) {
+      _triggerPlayDirect(context: '_loadSequence');
+      state = state.copyWith(isPlaying: true);
+    } else {
       await _audioPlayer.pause();
-      isPlaying = false;
-
-      final current = state;
-      if (current != null) {
-        state = current.copyWith();
-      }
-    } catch (error, stackTrace) {
-      debugPrint(
-        '[CurrentSongNotifier] completion handling error: $error\n$stackTrace',
-      );
-    } finally {
-      _handlingTrackCompletion = false;
+      state = state.copyWith(isPlaying: false);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+  Future<void> applyRepeatMode(PlaybackRepeatMode mode) =>
+      _runPlayerMutation(() => _applyRepeatModeDirect(mode));
 
   Future<void> updateSong(
     SongModel song, {
@@ -260,7 +339,7 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     bool autoplay = true,
   }) async {
     debugPrint(
-      '[CurrentSongNotifier] updateSong() called for ${song.id} - ${song.songName}',
+      '[CurrentSongNotifier] updateSong() -> ${song.id} - ${song.songName}',
     );
 
     if (syncQueue) {
@@ -270,122 +349,107 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     }
 
     final requestId = ++_playRequestId;
+    state = state.copyWith(song: song);
 
-    state = song;
-    isPlaying = false;
+    await _runPlayerMutation(() async {
+      try {
+        final candidates = _playbackCandidates(song.songUrl);
+        if (candidates.isEmpty) {
+          throw StateError('Missing playback URL for song ${song.id}');
+        }
 
-    try {
-      final playbackCandidates = _playbackCandidates(song.songUrl);
-      if (playbackCandidates.isEmpty) {
-        throw StateError('Missing playback URL for song ${song.id}');
-      }
+        final queueState = ref.read(playbackQueueControllerProvider);
+        final queueSongs =
+            queueState.items.map((item) => item.song).toList(growable: false);
+        final queueIndex = queueState.currentIndex ?? 0;
 
-      final queueState = ref.read(playbackQueueControllerProvider);
-      final queueSongs =
-          queueState.items.map((item) => item.song).toList(growable: false);
-      final queueIndex = queueState.currentIndex ?? 0;
-      final useQueueSource = queueSongs.isNotEmpty &&
-          queueIndex >= 0 &&
-          queueIndex < queueSongs.length &&
-          queueSongs[queueIndex].id == song.id;
-      final playbackSongs = useQueueSource ? queueSongs : <SongModel>[song];
-      final initialIndex = useQueueSource ? queueIndex : 0;
+        final useQueueSource = queueSongs.isNotEmpty &&
+            queueIndex >= 0 &&
+            queueIndex < queueSongs.length &&
+            queueSongs[queueIndex].id == song.id;
 
-      await _audioPlayer.stop();
-      if (_isStaleRequest(requestId)) return;
+        final playbackSongs = useQueueSource ? queueSongs : <SongModel>[song];
+        final initialIndex = useQueueSource ? queueIndex : 0;
 
-      Object? lastError;
-      StackTrace? lastStackTrace;
-      var started = false;
+        await _applyRepeatModeDirect(queueState.repeatMode);
+        if (_isStaleRequest(requestId)) return;
 
-      for (final playbackUrl in playbackCandidates) {
-        try {
-          if (_isStaleRequest(requestId)) return;
-          await applyRepeatMode(queueState.repeatMode);
-          debugPrint('[CurrentSongNotifier] setAudioSource -> $playbackUrl');
-          await _audioPlayer.setAudioSource(
-            _buildQueueSource(
-              playbackSongs,
-              overrideIndex: initialIndex,
-              overrideUrl: playbackUrl,
-            ),
-            initialIndex: initialIndex,
-            initialPosition: Duration.zero,
-          );
-          debugPrint('[CurrentSongNotifier] setAudioSource DONE');
+        if (_matchesLoadedSequence(playbackSongs)) {
+          await _audioPlayer.seek(Duration.zero, index: initialIndex);
           if (_isStaleRequest(requestId)) return;
 
           if (autoplay) {
             unawaited(_songLocalRepository.saveRecentlyPlayed(song));
-            if (_isStaleRequest(requestId)) return;
-            await _audioPlayer.play();
-            debugPrint('[CurrentSongNotifier] audioPlayer.play() started');
-            if (_isStaleRequest(requestId)) return;
-            isPlaying = true;
+            _triggerPlayDirect(context: 'updateSong.reuseSequence');
+            state = state.copyWith(isPlaying: true);
           } else {
-            isPlaying = false;
+            await _audioPlayer.pause();
+            state = state.copyWith(isPlaying: false);
           }
-
-          started = true;
-          break;
-        } on PlayerException catch (e, st) {
-          lastError = e;
-          lastStackTrace = st;
-          debugPrint(
-            '[CurrentSongNotifier] candidate failed -> '
-            'code=${e.code}, message=${e.message}, url=$playbackUrl\n$st',
-          );
-          try {
-            await _audioPlayer.stop();
-          } catch (_) {}
-        } catch (e, st) {
-          lastError = e;
-          lastStackTrace = st;
-          debugPrint(
-            '[CurrentSongNotifier] candidate failed -> url=$playbackUrl\n$e\n$st',
-          );
-          try {
-            await _audioPlayer.stop();
-          } catch (_) {}
+          return;
         }
-      }
 
-      if (!started) {
-        if (lastError is PlayerException) {
-          throw lastError;
+        Object? lastError;
+        StackTrace? lastStackTrace;
+        var started = false;
+
+        for (final url in candidates) {
+          if (_isStaleRequest(requestId)) return;
+          try {
+            debugPrint('[CurrentSongNotifier] loadSequence -> $url');
+            await _loadSequence(
+              songs: playbackSongs,
+              initialIndex: initialIndex,
+              initialPosition: Duration.zero,
+              playbackUrl: url,
+              autoplay: autoplay,
+              requestId: requestId,
+            );
+            if (_isStaleRequest(requestId)) return;
+            if (autoplay) {
+              unawaited(_songLocalRepository.saveRecentlyPlayed(song));
+            }
+            started = true;
+            break;
+          } on PlayerException catch (e, st) {
+            lastError = e;
+            lastStackTrace = st;
+            debugPrint(
+              '[CurrentSongNotifier] candidate failed -> '
+              'code=${e.code}, message=${e.message}, url=$url\n$st',
+            );
+          } catch (e, st) {
+            lastError = e;
+            lastStackTrace = st;
+            debugPrint(
+              '[CurrentSongNotifier] candidate failed -> url=$url\n$e\n$st',
+            );
+          }
         }
-        throw StateError(
-          'Unable to start playback for ${song.id}: ${lastError ?? 'unknown error'}\n${lastStackTrace ?? ''}',
+
+        if (!started) {
+          Error.throwWithStackTrace(
+            lastError is PlayerException
+                ? lastError
+                : StateError(
+                    'Unable to start playback for ${song.id}: $lastError',
+                  ),
+            lastStackTrace ?? StackTrace.current,
+          );
+        }
+      } on PlayerException catch (e, st) {
+        if (_isStaleRequest(requestId)) return;
+        debugPrint(
+          '[CurrentSongNotifier] PlayerException -> '
+          'code=${e.code}, message=${e.message}\n$st',
         );
+        state = state.copyWith(isPlaying: false);
+      } catch (e, st) {
+        if (_isStaleRequest(requestId)) return;
+        debugPrint('[CurrentSongNotifier] ERROR in updateSong: $e\n$st');
+        state = state.copyWith(isPlaying: false);
       }
-
-      if (_isStaleRequest(requestId)) return;
-      final current = state;
-      if (current != null) {
-        state = current.copyWith();
-      }
-    } on PlayerException catch (e, st) {
-      if (_isStaleRequest(requestId)) return;
-      debugPrint(
-        '[CurrentSongNotifier] PlayerException -> '
-        'code=${e.code}, message=${e.message}\n$st',
-      );
-      isPlaying = false;
-
-      final current = state;
-      if (current != null) {
-        state = current.copyWith();
-      }
-    } catch (e, st) {
-      if (_isStaleRequest(requestId)) return;
-      debugPrint('[CurrentSongNotifier] ERROR in updateSong: $e\n$st');
-      isPlaying = false;
-
-      final current = state;
-      if (current != null) {
-        state = current.copyWith();
-      }
-    }
+    });
   }
 
   Future<void> refreshQueueSource({
@@ -400,124 +464,202 @@ class CurrentSongNotifier extends _$CurrentSongNotifier {
     if (songs.isEmpty || currentIndex == null) return;
 
     final requestId = ++_playRequestId;
-    final shouldAutoplay = autoplay ?? isPlaying;
-    final currentPosition =
-        preservePosition ? _audioPlayer.position : Duration.zero;
+    final shouldAutoplay = autoplay ?? state.isPlaying;
     final currentSong = songs[currentIndex];
-    final playbackCandidates = _playbackCandidates(currentSong.songUrl);
+    final candidates = _playbackCandidates(currentSong.songUrl);
 
-    if (playbackCandidates.isEmpty) return;
+    if (candidates.isEmpty) return;
 
-    state = currentSong;
+    state = state.copyWith(song: currentSong);
 
-    try {
-      Object? lastError;
-      StackTrace? lastStackTrace;
-      var refreshed = false;
+    await _runPlayerMutation(() async {
+      // Posizione letta DENTRO la mutation per evitare valori stale.
+      final currentPosition =
+          preservePosition ? _audioPlayer.position : Duration.zero;
 
-      for (final playbackUrl in playbackCandidates) {
-        try {
-          await applyRepeatMode(queueState.repeatMode);
-          await _audioPlayer.setAudioSource(
-            _buildQueueSource(
-              songs,
-              overrideIndex: currentIndex,
-              overrideUrl: playbackUrl,
-            ),
-            initialIndex: currentIndex,
-            initialPosition: currentPosition,
-          );
+      try {
+        Object? lastError;
+        StackTrace? lastStackTrace;
+        var refreshed = false;
+
+        for (final url in candidates) {
           if (_isStaleRequest(requestId)) return;
-
-          if (shouldAutoplay) {
-            await _audioPlayer.play();
-            isPlaying = true;
-          } else {
-            await _audioPlayer.pause();
-            isPlaying = false;
+          try {
+            await _applyRepeatModeDirect(queueState.repeatMode);
+            await _loadSequence(
+              songs: songs,
+              initialIndex: currentIndex,
+              initialPosition: currentPosition,
+              playbackUrl: url,
+              autoplay: shouldAutoplay,
+              requestId: requestId,
+            );
+            refreshed = true;
+            break;
+          } on PlayerException catch (e, st) {
+            lastError = e;
+            lastStackTrace = st;
+            debugPrint(
+              '[CurrentSongNotifier] refresh candidate failed -> '
+              'code=${e.code}, message=${e.message}, url=$url\n$st',
+            );
+          } catch (e, st) {
+            lastError = e;
+            lastStackTrace = st;
+            debugPrint(
+              '[CurrentSongNotifier] refresh candidate failed -> '
+              'url=$url\n$e\n$st',
+            );
           }
+        }
 
-          refreshed = true;
-          break;
-        } on PlayerException catch (e, st) {
-          lastError = e;
-          lastStackTrace = st;
-          debugPrint(
-            '[CurrentSongNotifier] refresh candidate failed -> '
-            'code=${e.code}, message=${e.message}, url=$playbackUrl\n$st',
+        if (!refreshed) {
+          throw StateError(
+            'Unable to refresh playback for ${currentSong.id}: '
+            '${lastError ?? 'unknown error'}\n${lastStackTrace ?? ''}',
           );
-          try {
-            await _audioPlayer.stop();
-          } catch (_) {}
-        } catch (e, st) {
-          lastError = e;
-          lastStackTrace = st;
-          debugPrint(
-            '[CurrentSongNotifier] refresh candidate failed -> url=$playbackUrl\n$e\n$st',
-          );
-          try {
-            await _audioPlayer.stop();
-          } catch (_) {}
+        }
+      } catch (e, st) {
+        if (_isStaleRequest(requestId)) return;
+        debugPrint(
+            '[CurrentSongNotifier] ERROR in refreshQueueSource: $e\n$st');
+      }
+    });
+  }
+
+  Future<void> insertIntoQueueSequence(
+    int index,
+    List<SongModel> songs,
+  ) async {
+    await _runPlayerMutation(() async {
+      if (songs.isEmpty || !_sourceInitialized) return;
+
+      final safeIndex = index.clamp(0, _queueSource.length);
+      await _queueSource.insertAll(safeIndex, _buildSequenceSources(songs));
+
+      final updatedIds = [..._loadedSequenceIds];
+      updatedIds.insertAll(safeIndex, songs.map((s) => s.id));
+      _loadedSequenceIds = updatedIds;
+    });
+  }
+
+  Future<void> moveInQueueSequence(int oldIndex, int newIndex) async {
+    await _runPlayerMutation(() async {
+      if (!_sourceInitialized ||
+          oldIndex < 0 ||
+          oldIndex >= _queueSource.length ||
+          newIndex < 0 ||
+          newIndex >= _queueSource.length ||
+          oldIndex == newIndex) return;
+
+      await _queueSource.move(oldIndex, newIndex);
+
+      final updatedIds = [..._loadedSequenceIds];
+      final moved = updatedIds.removeAt(oldIndex);
+      updatedIds.insert(newIndex, moved);
+      _loadedSequenceIds = updatedIds;
+    });
+  }
+
+  Future<void> removeFromQueueSequence(
+    int index, {
+    int? replacementIndex,
+    bool autoplay = false,
+  }) async {
+    await _runPlayerMutation(() async {
+      if (!_sourceInitialized ||
+          index < 0 ||
+          index >= _queueSource.length ||
+          index >= _loadedSequenceIds.length) return;
+
+      final removingCurrent = _audioPlayer.currentIndex == index;
+
+      await _queueSource.removeAt(index);
+
+      final updatedIds = [..._loadedSequenceIds]..removeAt(index);
+      _loadedSequenceIds = updatedIds;
+
+      if (removingCurrent && replacementIndex != null) {
+        await _audioPlayer.seek(Duration.zero, index: replacementIndex);
+        if (autoplay) {
+          _triggerPlayDirect(context: 'removeFromQueueSequence');
+          state = state.copyWith(isPlaying: true);
+        } else {
+          await _audioPlayer.pause();
+          state = state.copyWith(isPlaying: false);
         }
       }
+    });
+  }
 
-      if (!refreshed) {
-        throw StateError(
-          'Unable to refresh playback for ${currentSong.id}: ${lastError ?? 'unknown error'}\n${lastStackTrace ?? ''}',
-        );
-      }
+  Future<void> seekToQueueIndex(int index, {bool autoplay = true}) async {
+    await _runPlayerMutation(() async {
+      if (!_sourceInitialized ||
+          index < 0 ||
+          index >= _queueSource.length ||
+          index >= _loadedSequenceIds.length) return;
 
-      if (_isStaleRequest(requestId)) return;
-      final current = state;
-      if (current != null) {
-        state = current.copyWith();
+      await _audioPlayer.seek(Duration.zero, index: index);
+
+      if (autoplay) {
+        _triggerPlayDirect(context: 'seekToQueueIndex');
+        state = state.copyWith(isPlaying: true);
+      } else {
+        await _audioPlayer.pause();
+        state = state.copyWith(isPlaying: false);
       }
-    } catch (e, st) {
-      if (_isStaleRequest(requestId)) return;
-      debugPrint('[CurrentSongNotifier] ERROR in refreshQueueSource: $e\n$st');
-    }
+    });
   }
 
   Future<void> playPause() async {
-    final current = state;
-    if (current == null) return;
+    if (state.song == null) return;
 
-    try {
-      if (isPlaying) {
-        await _audioPlayer.pause();
-      } else {
-        await _audioPlayer.play();
+    await _runPlayerMutation(() async {
+      try {
+        if (state.isPlaying) {
+          await _audioPlayer.pause();
+          state = state.copyWith(isPlaying: false);
+        } else {
+          _triggerPlayDirect(context: 'playPause');
+          state = state.copyWith(isPlaying: true);
+        }
+      } catch (e, st) {
+        debugPrint('[CurrentSongNotifier] ERROR in playPause: $e\n$st');
       }
-
-      isPlaying = !isPlaying;
-      state = current.copyWith();
-    } catch (e, st) {
-      debugPrint('[CurrentSongNotifier] ERROR in playPause: $e\n$st');
-    }
+    });
   }
 
   Future<void> stopAndClear() async {
-    debugPrint('[CurrentSongNotifier] stopAndClear() called');
+    debugPrint('[CurrentSongNotifier] stopAndClear()');
     final requestId = ++_playRequestId;
 
-    try {
-      await _audioPlayer.stop();
-      debugPrint('[CurrentSongNotifier] audioPlayer.stop() DONE');
-    } catch (e, st) {
-      debugPrint('[CurrentSongNotifier] stopAndClear() ERROR: $e\n$st');
-    }
+    await _runPlayerMutation(() async {
+      try {
+        await _audioPlayer.stop();
+        if (_queueSource.length > 0) {
+          await _queueSource.clear();
+        }
+      } catch (e, st) {
+        debugPrint('[CurrentSongNotifier] stopAndClear() ERROR: $e\n$st');
+      }
 
-    if (_isStaleRequest(requestId)) return;
+      _sourceInitialized = false;
+      _loadedSequenceIds = const [];
 
-    isPlaying = false;
-    state = null;
+      if (_isStaleRequest(requestId)) return;
+
+      state = const CurrentSongState();
+    });
   }
 
-  void seek(double val) {
-    final duration = _audioPlayer.duration;
-    if (duration == null) return;
+  // seek() nella mutation queue — non interferisce più con altre operazioni.
+  Future<void> seek(double val) {
+    return _runPlayerMutation(() async {
+      final duration = _audioPlayer.duration;
+      if (duration == null) return;
 
-    final targetMs = (val * duration.inMilliseconds).toInt();
-    _audioPlayer.seek(Duration(milliseconds: targetMs));
+      final targetMs = (val * duration.inMilliseconds).toInt();
+      await _audioPlayer.seek(Duration(milliseconds: targetMs));
+    });
   }
 }

@@ -1,9 +1,14 @@
 import 'package:client/features/home/artist/view/pages/artist_detail_page.dart';
 import 'package:client/features/home/album/view/pages/album_detail_page.dart';
+import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/model/song_model.dart';
+import 'package:client/features/home/song/providers/playback_queue_controller.dart';
+import 'package:client/features/home/song/view/widgets/queue_swipe_wrapper.dart';
 import 'package:client/features/home/artist/model/artist_model.dart';
 import 'package:client/features/home/album/model/album_model.dart';
+import 'package:client/features/home/song/widget/searchPage/search_filter_chips.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class SearchResultsSection extends StatelessWidget {
@@ -14,6 +19,19 @@ class SearchResultsSection extends StatelessWidget {
   final Future<void> Function(List<SongModel> songs, int index) onSongTap;
   final Future<void> Function(List<SongModel> songs, int index) onSongMoreTap;
 
+  /// Filtro attivo. Quando != all, mostra solo la sezione corrispondente.
+  final SearchFilter filter;
+
+  /// Quante songs mostrare in modalità "All" prima di far apparire il
+  /// bottone "Show more". Quando il filtro è songs, il limite è ignorato.
+  final int songsCollapsedLimit;
+
+  /// Se true, la sezione songs è stata espansa manualmente dall'utente.
+  final bool songsExpanded;
+
+  /// Callback per toggle dell'espansione.
+  final VoidCallback onToggleSongsExpanded;
+
   const SearchResultsSection({
     super.key,
     required this.songs,
@@ -22,6 +40,10 @@ class SearchResultsSection extends StatelessWidget {
     required this.query,
     required this.onSongTap,
     required this.onSongMoreTap,
+    this.filter = SearchFilter.all,
+    this.songsCollapsedLimit = 5,
+    this.songsExpanded = false,
+    required this.onToggleSongsExpanded,
   });
 
   @override
@@ -31,36 +53,42 @@ class SearchResultsSection extends StatelessWidget {
     // SONGS: filtro locale su titolo + artisti
     final songMatches = songs.where((song) {
       final titleMatch = song.songName.toLowerCase().contains(q);
-
       final artistMatch = song.artists.any(
         (a) => a.artistName?.toLowerCase().contains(q) == true,
       );
-
       return titleMatch || artistMatch;
     }).toList();
 
-    // ARTISTS: se il backend usa già search, sarà comunque un sottoinsieme
+    // ARTISTS
     final artistMatches = artists.where((artist) {
       final name = artist.name.toLowerCase();
       final display = (artist.displayName ?? '').toLowerCase();
       return name.contains(q) || display.contains(q);
     }).toList();
 
-    // ALBUMS: filtro locale su title + label
+    // ALBUMS
     final albumMatches = albums.where((album) {
       final title = album.title.toLowerCase();
       final label = (album.label ?? '').toLowerCase();
       return title.contains(q) || label.contains(q);
     }).toList();
 
-    final hasAnyResult = songMatches.isNotEmpty ||
-        artistMatches.isNotEmpty ||
-        albumMatches.isNotEmpty;
+    // Visibilità per sezione in base al filtro.
+    final showSongs =
+        filter == SearchFilter.all || filter == SearchFilter.songs;
+    final showArtists =
+        filter == SearchFilter.all || filter == SearchFilter.artists;
+    final showAlbums =
+        filter == SearchFilter.all || filter == SearchFilter.albums;
 
-    if (!hasAnyResult) {
+    final hasAnyVisibleResult = (showSongs && songMatches.isNotEmpty) ||
+        (showArtists && artistMatches.isNotEmpty) ||
+        (showAlbums && albumMatches.isNotEmpty);
+
+    if (!hasAnyVisibleResult) {
       return Center(
         child: Text(
-          'No results found for "$query".',
+          _noResultsMessage(),
           textAlign: TextAlign.center,
           style: GoogleFonts.plusJakartaSans(
             color: Colors.white54,
@@ -70,61 +98,180 @@ class SearchResultsSection extends StatelessWidget {
       );
     }
 
+    // Applica il limite solo quando siamo in modalità "All" e non espanso.
+    // Se l'utente ha esplicitamente scelto il filtro Songs, mostriamo tutto.
+    final applyLimit = filter == SearchFilter.all && !songsExpanded;
+    final displayedSongs = applyLimit
+        ? songMatches.take(songsCollapsedLimit).toList(growable: false)
+        : songMatches;
+    final hiddenSongs = (songMatches.length - displayedSongs.length)
+        .clamp(0, songMatches.length);
+    final canShowMoreSongs = applyLimit && hiddenSongs > 0;
+    final canCollapseSongs = filter == SearchFilter.all &&
+        songsExpanded &&
+        songMatches.length > songsCollapsedLimit;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
       children: [
-        if (songMatches.isNotEmpty) ...[
-          const _SectionTitle('Songs'),
+        if (showSongs && songMatches.isNotEmpty) ...[
+          _SectionTitle(
+            'Songs',
+            count: songMatches.length,
+          ),
           const SizedBox(height: 8),
-          ...songMatches.asMap().entries.map(
+          ...displayedSongs.asMap().entries.map(
                 (entry) => _SongResultTile(
                   song: entry.value,
                   index: entry.key,
+                  query: query,
+                  // Passo la lista INTERA (non quella tagliata) così i tap
+                  // creano una queue coerente anche quando la UI è collapsed.
                   songMatches: songMatches,
                   onSongTap: onSongTap,
                   onSongMoreTap: onSongMoreTap,
                 ),
               ),
+          if (canShowMoreSongs)
+            _ShowMoreButton(
+              label:
+                  'Show $hiddenSongs more song${hiddenSongs == 1 ? '' : 's'}',
+              onTap: onToggleSongsExpanded,
+              icon: Icons.expand_more_rounded,
+            )
+          else if (canCollapseSongs)
+            _ShowMoreButton(
+              label: 'Show less',
+              onTap: onToggleSongsExpanded,
+              icon: Icons.expand_less_rounded,
+            ),
           const SizedBox(height: 24),
         ],
-        if (artistMatches.isNotEmpty) ...[
-          const _SectionTitle('Artists'),
+        if (showArtists && artistMatches.isNotEmpty) ...[
+          _SectionTitle(
+            'Artists',
+            count: artistMatches.length,
+          ),
           const SizedBox(height: 8),
           ...artistMatches.map((a) => _ArtistResultTile(artist: a)),
           const SizedBox(height: 24),
         ],
-        if (albumMatches.isNotEmpty) ...[
-          const _SectionTitle('Albums'),
+        if (showAlbums && albumMatches.isNotEmpty) ...[
+          _SectionTitle(
+            'Albums',
+            count: albumMatches.length,
+          ),
           const SizedBox(height: 8),
           ...albumMatches.map((a) => _AlbumResultTile(album: a)),
         ],
       ],
     );
   }
+
+  String _noResultsMessage() {
+    switch (filter) {
+      case SearchFilter.songs:
+        return 'No songs found for "$query".';
+      case SearchFilter.artists:
+        return 'No artists found for "$query".';
+      case SearchFilter.albums:
+        return 'No albums found for "$query".';
+      case SearchFilter.all:
+        return 'No results found for "$query".';
+    }
+  }
 }
 
 class _SectionTitle extends StatelessWidget {
   final String label;
+  final int? count;
 
-  const _SectionTitle(this.label);
+  const _SectionTitle(this.label, {this.count});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: GoogleFonts.plusJakartaSans(
-        color: Colors.white,
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
+    return Row(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (count != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            '$count',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white38,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ShowMoreButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final IconData icon;
+
+  const _ShowMoreButton({
+    required this.label,
+    required this.onTap,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withOpacity(0.04),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.08),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: Colors.white70),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
 /// SONG TILE -----------------------------------------------------------------
-class _SongResultTile extends StatelessWidget {
+class _SongResultTile extends ConsumerWidget {
   final SongModel song;
   final int index;
+  final String query;
   final List<SongModel> songMatches;
   final Future<void> Function(List<SongModel> songs, int index) onSongTap;
   final Future<void> Function(List<SongModel> songs, int index) onSongMoreTap;
@@ -132,83 +279,104 @@ class _SongResultTile extends StatelessWidget {
   const _SongResultTile({
     required this.song,
     required this.index,
+    required this.query,
     required this.songMatches,
     required this.onSongTap,
     required this.onSongMoreTap,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final artist = song.artists.isNotEmpty
-        ? song.artists.map((a) => a.artistName).join(', ')
+        ? (song.artists.first.artistName ?? 'Unknown artist')
         : 'Unknown artist';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white.withOpacity(0.03),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(
-            song.thumbnailUrl ??
-                'https://via.placeholder.com/150?text=No+Image',
-            width: 46,
-            height: 46,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF811F1A),
-                    Color(0xFF4B39EF),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+    return QueueSwipeWrapper(
+      swipeKey: ValueKey('search-${song.id}-$index'),
+      successMessage: 'Added "${song.songName}" to queue',
+      onQueue: () =>
+          ref.read(playbackQueueControllerProvider.notifier).addToQueue(
+                song,
+                sourceType: PlaybackSourceType.search,
+                sourceId: query.trim().isEmpty ? null : query.trim(),
+              ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onSongTap(songMatches, index),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: song.thumbnailUrl != null &&
+                            song.thumbnailUrl!.isNotEmpty
+                        ? Image.network(
+                            song.thumbnailUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.white10,
+                              child: const Icon(
+                                Icons.music_note_rounded,
+                                size: 20,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.white10,
+                            child: const Icon(
+                              Icons.music_note_rounded,
+                              size: 20,
+                              color: Colors.white54,
+                            ),
+                          ),
+                  ),
                 ),
-              ),
-              child: const Icon(
-                Icons.music_note_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song.songName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.white54,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_vert_rounded,
+                    color: Colors.white54,
+                  ),
+                  onPressed: () => onSongMoreTap(songMatches, index),
+                ),
+              ],
             ),
           ),
         ),
-        title: Text(
-          song.songName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white70,
-            fontSize: 12,
-          ),
-        ),
-        trailing: const Icon(
-          Icons.play_arrow_rounded,
-          color: Colors.white70,
-        ),
-        onTap: () => onSongTap(songMatches, index),
-        onLongPress: () => onSongMoreTap(songMatches, index),
       ),
     );
   }
@@ -222,64 +390,70 @@ class _ArtistResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = artist.displayName ?? artist.name;
-    final subtitle = artist.country ?? 'Artist';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white.withOpacity(0.03),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ArtistDetailPage(artistId: artist.id),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.white10,
+                backgroundImage:
+                    artist.imageUrl != null && artist.imageUrl!.isNotEmpty
+                        ? NetworkImage(artist.imageUrl!)
+                        : null,
+                child: (artist.imageUrl == null || artist.imageUrl!.isEmpty)
+                    ? const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white54,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      artist.displayName ?? artist.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Artist',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white54,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white38,
+              ),
+            ],
+          ),
         ),
       ),
-      child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          leading: CircleAvatar(
-            radius: 22,
-            backgroundColor: Colors.white.withOpacity(0.06),
-            backgroundImage:
-                artist.imageUrl != null ? NetworkImage(artist.imageUrl!) : null,
-            child: artist.imageUrl == null
-                ? const Icon(
-                    Icons.person_rounded,
-                    color: Colors.white70,
-                  )
-                : null,
-          ),
-          title: Text(
-            displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
-          ),
-          trailing: const Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 16,
-            color: Colors.white54,
-          ),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ArtistDetailPage(artistId: artist.id),
-              ),
-            );
-          }),
     );
   }
 }
@@ -292,85 +466,85 @@ class _AlbumResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final year = album.releaseDate?.year.toString();
-    final type = album.albumType ?? 'Album';
-    final subtitle = [
-      type[0].toUpperCase() + type.substring(1),
-      if (year != null) year,
-      if (album.label != null && album.label!.isNotEmpty) album.label!,
-    ].join(' • ');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white.withOpacity(0.03),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(
-            album.coverUrl ?? 'https://via.placeholder.com/150?text=Album',
-            width: 46,
-            height: 46,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF4B39EF),
-                    Color(0xFF111827),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Icon(
-                Icons.album_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-          ),
-        ),
-        title: Text(
-          album.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white70,
-            fontSize: 12,
-          ),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 16,
-          color: Colors.white54,
-        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         onTap: () {
-          Navigator.of(context).push(
+          Navigator.push(
+            context,
             MaterialPageRoute(
               builder: (_) => AlbumDetailPage(albumId: album.id),
             ),
           );
         },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: album.coverUrl != null && album.coverUrl!.isNotEmpty
+                      ? Image.network(
+                          album.coverUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.white10,
+                            child: const Icon(
+                              Icons.album_rounded,
+                              size: 20,
+                              color: Colors.white54,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.white10,
+                          child: const Icon(
+                            Icons.album_rounded,
+                            size: 20,
+                            color: Colors.white54,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      album.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      album.label?.isNotEmpty == true ? album.label! : 'Album',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white54,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white38,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:client/features/home/artist/view/widgets/detailpage/artist_song_
 import 'package:client/features/home/artist/view/widgets/detailpage/cosmic_header.dart';
 import 'package:client/features/home/artist/view/widgets/detailpage/section_card.dart';
 import 'package:client/features/home/artist/viewmodel/artist_viewmodel.dart';
+import 'package:client/features/home/song/view/widgets/queue_swipe_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -59,6 +60,7 @@ class ArtistDetailBody extends ConsumerWidget {
                           index: entry.key + 1,
                           songRef: entry.value,
                           queueRefs: visibleSongs,
+                          artistId: artist.id,
                         ),
                       );
                     }).toList(),
@@ -109,12 +111,14 @@ class ArtistSongRefRow extends ConsumerStatefulWidget {
   final int index;
   final ArtistSongRef songRef;
   final List<ArtistSongRef> queueRefs;
+  final String artistId;
 
   const ArtistSongRefRow({
     super.key,
     required this.index,
     required this.songRef,
     required this.queueRefs,
+    required this.artistId,
   });
 
   @override
@@ -135,6 +139,7 @@ class _ArtistSongRefRowState extends ConsumerState<ArtistSongRefRow> {
         ref: ref,
         songRef: widget.songRef,
         queueRefs: widget.queueRefs,
+        sourceId: widget.artistId,
       );
     } finally {
       if (mounted) {
@@ -143,56 +148,71 @@ class _ArtistSongRefRowState extends ConsumerState<ArtistSongRefRow> {
     }
   }
 
+  Future<void> _handleQueue() {
+    return queueArtistSongRef(
+      ref: ref,
+      songRef: widget.songRef,
+      sourceId: widget.artistId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final songRef = widget.songRef;
 
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      onTap: _isLoading ? null : _handleTap,
-      leading: SizedBox(
-        width: 36,
-        child: Center(
-          child: Text(
-            '${widget.index}',
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
+    return QueueSwipeWrapper(
+      swipeKey: ValueKey(
+        'artist-${widget.artistId}-${songRef.songId}-${widget.index}',
+      ),
+      successMessage: 'Added "${songRef.songName ?? 'this track'}" to queue',
+      onQueue: _handleQueue,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        onTap: _isLoading ? null : _handleTap,
+        leading: SizedBox(
+          width: 36,
+          child: Center(
+            child: Text(
+              '${widget.index}',
+              style: const TextStyle(color: Colors.white54, fontSize: 13),
+            ),
           ),
         ),
-      ),
-      title: Text(
-        songRef.songName ?? 'Unknown track',
-        style:
-            const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        songRef.role,
-        style: const TextStyle(color: Colors.white54, fontSize: 11),
-      ),
-      trailing: _isLoading
-          ? const SizedBox(
-              width: 40,
-              height: 40,
-              child: Padding(
-                padding: EdgeInsets.all(10),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white70,
-                ),
-              ),
-            )
-          : songRef.thumbnailUrl != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.network(
-                    songRef.thumbnailUrl!,
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
+        title: Text(
+          songRef.songName ?? 'Unknown track',
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          songRef.role,
+          style: const TextStyle(color: Colors.white54, fontSize: 11),
+        ),
+        trailing: _isLoading
+            ? const SizedBox(
+                width: 40,
+                height: 40,
+                child: Padding(
+                  padding: EdgeInsets.all(10),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white70,
                   ),
-                )
-              : const Icon(Icons.music_note_rounded, color: Colors.white38),
+                ),
+              )
+            : songRef.thumbnailUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      songRef.thumbnailUrl!,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : const Icon(Icons.music_note_rounded, color: Colors.white38),
+      ),
     );
   }
 }

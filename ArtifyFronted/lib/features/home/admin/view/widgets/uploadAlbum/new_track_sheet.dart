@@ -29,12 +29,9 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
   final _genreController = TextEditingController();
   final _moodController = TextEditingController();
   final _lyricsController = TextEditingController();
+  final _artistSearchController = TextEditingController();
 
-  // Audio
   PickedMedia? _audio;
-
-  // Artists
-  final TextEditingController _artistSearchController = TextEditingController();
   String _artistSearchQuery = '';
   final List<ArtistModel> _selectedArtists = [];
   final Map<String, SongArtistRole> _artistRoles = {};
@@ -52,32 +49,31 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
 
   Future<void> _pickAudio() async {
     final picked = await pickAudio();
-    if (picked != null) {
-      setState(() {
-        _audio = picked;
-      });
+    if (picked != null && mounted) {
+      setState(() => _audio = picked);
     }
   }
 
-  void _onSelectArtist(ArtistModel artist) {
+  void _selectArtist(ArtistModel artist) {
+    if (_selectedArtists.any((item) => item.id == artist.id)) return;
+
     setState(() {
-      if (_selectedArtists.any((a) => a.id == artist.id)) return;
-
       _selectedArtists.add(artist);
-
-      // Di default il primo è PRIMARY, gli altri FEATURED
-      if (_selectedArtists.length == 1) {
-        _artistRoles[artist.id] = SongArtistRole.primary;
-      } else {
-        _artistRoles[artist.id] = SongArtistRole.featured;
-      }
+      _artistRoles[artist.id] = _selectedArtists.length == 1
+          ? SongArtistRole.primary
+          : SongArtistRole.featured;
     });
   }
 
-  void _onRemoveArtist(ArtistModel artist) {
+  void _removeArtist(ArtistModel artist) {
     setState(() {
-      _selectedArtists.removeWhere((a) => a.id == artist.id);
+      _selectedArtists.removeWhere((item) => item.id == artist.id);
       _artistRoles.remove(artist.id);
+
+      if (_selectedArtists.isNotEmpty &&
+          !_artistRoles.containsKey(_selectedArtists.first.id)) {
+        _artistRoles[_selectedArtists.first.id] = SongArtistRole.primary;
+      }
     });
   }
 
@@ -96,66 +92,33 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
       return;
     }
 
-    // 1) Prendo il path grezzo (nullable) da PickedMedia
-    final String? rawSongPath =
-        _audio!.filePath; // o .path / .url a seconda di PickedMedia
-
-    // 2) Validazione: se è null o vuoto, blocco
-    if (rawSongPath == null || rawSongPath.isEmpty) {
-      showSnackBar(
-        context,
-        'Audio file path is missing. Please re-select the audio.',
-      );
-      return;
-    }
-
-    // 3) Ora ho una String non-null
-    final String songUrl = rawSongPath;
-
-    final artistIds = _selectedArtists.map((a) => a.id).toList();
-    final rolesCopy = Map<String, SongArtistRole>.from(_artistRoles);
-
-    final track = AlbumTrackLocal(
-      localId: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title,
-      composer: composer,
-      songUrl: songUrl, // ✅ String, non più String?
-      genre: genre.isEmpty ? null : genre,
-      mood: mood.isEmpty ? null : mood,
-      lyrics: lyrics.isEmpty ? null : lyrics,
-      artistIds: artistIds,
-      artistRoles: rolesCopy,
+    widget.onCreated(
+      AlbumTrackLocal(
+        localId: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+        composer: composer,
+        audio: _audio!,
+        genre: genre.isEmpty ? null : genre,
+        mood: mood.isEmpty ? null : mood,
+        lyrics: lyrics.isEmpty ? null : lyrics,
+        artistIds: _selectedArtists.map((artist) => artist.id).toList(),
+        artistRoles: Map<String, SongArtistRole>.from(_artistRoles),
+      ),
     );
-
-    debugPrint('NewTrackSheet -> created local track:');
-    debugPrint('  localId: ${track.localId}');
-    debugPrint('  title: ${track.title}');
-    debugPrint('  composer: ${track.composer}');
-    debugPrint('  songUrl: ${track.songUrl}');
-    debugPrint('  artistIds: ${track.artistIds}');
-    debugPrint('  artistRoles: ${track.artistRoles}');
-
-    widget.onCreated(track);
   }
 
   @override
   Widget build(BuildContext context) {
-    final trimmedArtistQuery = _artistSearchQuery.trim();
-    final bool enableArtistSearch = trimmedArtistQuery.length >= 2;
-
-    final artistsAsync = enableArtistSearch
-        ? ref.watch(
-            getArtistsProvider(
-              search: trimmedArtistQuery,
-            ),
-          )
+    final trimmedQuery = _artistSearchQuery.trim();
+    final enableSearch = trimmedQuery.length >= 2;
+    final artistsAsync = enableSearch
+        ? ref.watch(getArtistsProvider(search: trimmedQuery))
         : const AsyncValue<List<ArtistModel>>.data(<ArtistModel>[]);
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
           Center(
             child: Container(
               width: 40,
@@ -177,22 +140,19 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Audio and metadata. Artwork will use the album cover.',
+            'This draft will be uploaded as a real song right before the album is created.',
             style: GoogleFonts.plusJakartaSans(
               color: Colors.white54,
               fontSize: 11,
+              height: 1.4,
             ),
           ),
           const SizedBox(height: 18),
-
-          // Audio
           ArtifyAudioPicker(
             selectedAudio: _audio,
             onTapSelectAudio: _pickAudio,
           ),
           const SizedBox(height: 18),
-
-          // Text metadata
           UploadTextField(
             label: 'Track title',
             placeholder: 'Give this track a name',
@@ -200,8 +160,35 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
             required: true,
           ),
           const SizedBox(height: 12),
-
-// Track artists & roles
+          UploadTextField(
+            label: 'Composer(s)',
+            placeholder: 'Who wrote this track?',
+            controller: _composerController,
+            required: true,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: UploadTextField(
+                  label: 'Genre',
+                  placeholder: 'Pop, Electronic, Indie...',
+                  controller: _genreController,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: UploadTextField(
+                  label: 'Mood',
+                  placeholder: 'Chill, Dark, Upbeat...',
+                  controller: _moodController,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          UploadLyricsField(controller: _lyricsController),
+          const SizedBox(height: 20),
           Text(
             'Track artists & roles',
             style: GoogleFonts.plusJakartaSans(
@@ -211,28 +198,34 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
             ),
           ),
           const SizedBox(height: 8),
-
-          if (_selectedArtists.isNotEmpty)
+          if (_selectedArtists.isEmpty)
+            Text(
+              'Optional: link artists now if this track needs explicit credits different from the album defaults.',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white38,
+                fontSize: 11,
+                height: 1.4,
+              ),
+            )
+          else
             Column(
               children: _selectedArtists.map((artist) {
-                final displayName = artist.displayName?.isNotEmpty == true
+                final label = artist.displayName?.isNotEmpty == true
                     ? artist.displayName!
                     : artist.name;
-                final currentRole = _artistRoles[artist.id] ??
+                final role = _artistRoles[artist.id] ??
                     (_selectedArtists.first.id == artist.id
                         ? SongArtistRole.primary
                         : SongArtistRole.featured);
 
                 return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  margin: const EdgeInsets.only(bottom: 8),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     color: Colors.white.withOpacity(0.03),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.12),
-                    ),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
                   ),
                   child: Row(
                     children: [
@@ -240,8 +233,20 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                         radius: 16,
                         backgroundColor: Colors.white.withOpacity(0.08),
                         child: Text(
-                          (displayName.isNotEmpty ? displayName[0] : '?')
-                              .toUpperCase(),
+                          label.isNotEmpty ? label[0].toUpperCase() : '?',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
                             color: Colors.white,
                             fontSize: 13,
@@ -249,54 +254,26 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.plusJakartaSans(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Artist role',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: Colors.white54,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(width: 8),
                       DropdownButtonHideUnderline(
                         child: DropdownButton<SongArtistRole>(
                           dropdownColor: const Color(0xFF111018),
-                          value: currentRole,
-                          items: SongArtistRole.values.map((role) {
+                          value: role,
+                          items: SongArtistRole.values.map((item) {
                             return DropdownMenuItem(
-                              value: role,
+                              value: item,
                               child: Text(
-                                role.value,
+                                item.value,
                                 style: GoogleFonts.plusJakartaSans(
                                   color: Colors.white,
                                   fontSize: 12,
                                 ),
                               ),
                             );
-                          }).toList(),
+                          }).toList(growable: false),
                           onChanged: (value) {
                             if (value == null) return;
-                            setState(() {
-                              _artistRoles[artist.id] = value;
-                            });
+                            setState(() => _artistRoles[artist.id] = value);
                           },
                         ),
                       ),
@@ -306,41 +283,17 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                           size: 18,
                           color: Colors.white54,
                         ),
-                        onPressed: () => _onRemoveArtist(artist),
+                        onPressed: () => _removeArtist(artist),
                       ),
                     ],
                   ),
                 );
-              }).toList(),
-            )
-          else
-            Text(
-              'No artists linked yet. Use the search below to attach them to this track.',
-              style: GoogleFonts.plusJakartaSans(
-                color: Colors.white38,
-                fontSize: 11,
-              ),
+              }).toList(growable: false),
             ),
-
           const SizedBox(height: 14),
-
-          Text(
-            'Search & link artists',
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-
           TextField(
             controller: _artistSearchController,
-            onChanged: (value) {
-              setState(() {
-                _artistSearchQuery = value;
-              });
-            },
+            onChanged: (value) => setState(() => _artistSearchQuery = value),
             style: GoogleFonts.plusJakartaSans(
               color: Colors.white,
               fontSize: 13,
@@ -357,9 +310,7 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(999),
-                borderSide: BorderSide(
-                  color: Colors.white.withOpacity(0.16),
-                ),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.16)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(999),
@@ -377,8 +328,8 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            enableArtistSearch
-                ? 'Type to search artists in your catalog.'
+            enableSearch
+                ? 'Search artists in your catalog and attach them to this draft.'
                 : 'Type at least 2 characters to search artists.',
             style: GoogleFonts.plusJakartaSans(
               color: Colors.white38,
@@ -386,19 +337,20 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
             ),
           ),
           const SizedBox(height: 8),
-
-          if (enableArtistSearch)
+          if (enableSearch)
             artistsAsync.when(
               data: (artists) {
                 final filtered = artists
                     .where(
-                      (a) => !_selectedArtists.any((sel) => sel.id == a.id),
+                      (artist) =>
+                          !_selectedArtists.any((item) => item.id == artist.id),
                     )
-                    .toList();
+                    .take(6)
+                    .toList(growable: false);
 
                 if (filtered.isEmpty) {
                   return Text(
-                    'No artists found for "$trimmedArtistQuery".',
+                    'No artists found for "$trimmedQuery".',
                     style: GoogleFonts.plusJakartaSans(
                       color: Colors.white38,
                       fontSize: 11,
@@ -407,14 +359,13 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                 }
 
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: filtered.take(6).map((artist) {
-                    final displayName = artist.displayName?.isNotEmpty == true
+                  children: filtered.map((artist) {
+                    final label = artist.displayName?.isNotEmpty == true
                         ? artist.displayName!
                         : artist.name;
 
                     return InkWell(
-                      onTap: () => _onSelectArtist(artist),
+                      onTap: () => _selectArtist(artist),
                       borderRadius: BorderRadius.circular(10),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -436,7 +387,7 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                displayName,
+                                label,
                                 style: GoogleFonts.plusJakartaSans(
                                   color: Colors.white,
                                   fontSize: 13,
@@ -452,7 +403,7 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                         ),
                       ),
                     );
-                  }).toList(),
+                  }).toList(growable: false),
                 );
               },
               loading: () => const Padding(
@@ -466,38 +417,15 @@ class _NewTrackSheetState extends ConsumerState<NewTrackSheet> {
                   ),
                 ),
               ),
-              error: (e, _) => Text(
-                e.toString(),
+              error: (error, _) => Text(
+                error.toString(),
                 style: GoogleFonts.plusJakartaSans(
                   color: Colors.redAccent,
                   fontSize: 11,
                 ),
               ),
             ),
-          const SizedBox(height: 12),
-          UploadTextField(
-            label: 'Composer(s)',
-            placeholder: 'Who wrote this track?',
-            controller: _composerController,
-            required: true,
-          ),
-          const SizedBox(height: 12),
-          UploadTextField(
-            label: 'Genre',
-            placeholder: 'Pop, Electronic, Indie...',
-            controller: _genreController,
-          ),
-          const SizedBox(height: 12),
-          UploadTextField(
-            label: 'Mood',
-            placeholder: 'Chill, Dark, Upbeat...',
-            controller: _moodController,
-          ),
-          const SizedBox(height: 12),
-          UploadLyricsField(
-            controller: _lyricsController,
-          ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(

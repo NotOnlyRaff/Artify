@@ -100,8 +100,21 @@ class PlaybackQueueItem {
   }
 }
 
+class PlaybackQueueIndexedItem {
+  final PlaybackQueueItem item;
+  final int absoluteIndex;
+  final int queuePosition;
+
+  const PlaybackQueueIndexedItem({
+    required this.item,
+    required this.absoluteIndex,
+    required this.queuePosition,
+  });
+}
+
 class PlaybackQueueState {
   static const _sentinel = Object();
+  static const int historyPreviewLimit = 20;
 
   final List<PlaybackQueueItem> items;
   final int? currentIndex;
@@ -126,6 +139,34 @@ class PlaybackQueueState {
 
   SongModel? get currentSong => currentItem?.song;
 
+  PlaybackQueueItem? get nextItem {
+    final index = currentIndex;
+    if (index == null) return null;
+    final candidate = index + 1;
+    if (candidate < items.length) {
+      return items[candidate];
+    }
+    return null;
+  }
+
+  PlaybackQueueItem? get previousItem {
+    final index = currentIndex;
+    if (index == null) return null;
+    final candidate = index - 1;
+    if (candidate >= 0) {
+      return items[candidate];
+    }
+    return null;
+  }
+
+  bool get hasNextItem =>
+      nextItem != null ||
+      (repeatMode == PlaybackRepeatMode.all && items.isNotEmpty);
+
+  bool get hasPreviousItem =>
+      previousItem != null ||
+      (repeatMode == PlaybackRepeatMode.all && items.isNotEmpty);
+
   List<PlaybackQueueItem> get previousItems {
     final index = currentIndex;
     if (index == null || index <= 0 || index > items.length) return const [];
@@ -138,6 +179,28 @@ class PlaybackQueueState {
     return items.sublist(index + 1);
   }
 
+  List<PlaybackQueueIndexedItem> get queuedEntries {
+    final index = currentIndex;
+    if (index == null || index + 1 >= items.length) return const [];
+
+    final entries = <PlaybackQueueIndexedItem>[];
+    for (var i = index + 1; i < items.length; i++) {
+      final item = items[i];
+      if (!item.isManuallyQueued) break;
+      entries.add(
+        PlaybackQueueIndexedItem(
+          item: item,
+          absoluteIndex: i,
+          queuePosition: entries.length + 1,
+        ),
+      );
+    }
+    return entries;
+  }
+
+  List<PlaybackQueueItem> get queuedItems =>
+      queuedEntries.map((entry) => entry.item).toList(growable: false);
+
   bool get hasQueue => items.isNotEmpty;
 
   bool get hasCurrent => currentItem != null;
@@ -146,7 +209,23 @@ class PlaybackQueueState {
 
   int get historyCount => previousItems.length;
 
-  int get queuedCount => upcomingItems.length;
+  List<PlaybackQueueItem> get recentPreviousItems {
+    final history = previousItems;
+    if (history.isEmpty) return const [];
+
+    final startIndex = history.length > historyPreviewLimit
+        ? history.length - historyPreviewLimit
+        : 0;
+
+    return history.sublist(startIndex).reversed.toList(growable: false);
+  }
+
+  int get historyOverflowCount {
+    final overflow = historyCount - recentPreviousItems.length;
+    return overflow > 0 ? overflow : 0;
+  }
+
+  int get queuedCount => queuedEntries.length;
 
   bool get hasQueuedItems => queuedCount > 0;
 

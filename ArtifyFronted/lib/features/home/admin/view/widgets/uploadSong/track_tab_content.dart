@@ -1,4 +1,3 @@
-// lib/features/home/song/view/widgets/track_tab_content.dart
 import 'package:client/core/utils.dart';
 import 'package:client/core/widgets/artify_audio_picker.dart';
 import 'package:client/core/widgets/artify_section_title.dart';
@@ -13,7 +12,6 @@ class TrackTabContent extends StatelessWidget {
   final VoidCallback onSelectImage;
   final VoidCallback onSelectAudio;
   final TextEditingController songNameController;
-  final TextEditingController composerController;
   final TextEditingController lyricsController;
 
   const TrackTabContent({
@@ -23,7 +21,6 @@ class TrackTabContent extends StatelessWidget {
     required this.onSelectImage,
     required this.onSelectAudio,
     required this.songNameController,
-    required this.composerController,
     required this.lyricsController,
   });
 
@@ -67,7 +64,7 @@ class TrackTabContent extends StatelessWidget {
           onTapSelectAudio: onSelectAudio,
         ),
         const SizedBox(height: 24),
-        const ArtifySectionTitle('Track text'),
+        const ArtifySectionTitle('Track basics'),
         const SizedBox(height: 12),
         UploadTextField(
           label: 'Song title',
@@ -75,19 +72,10 @@ class TrackTabContent extends StatelessWidget {
           controller: songNameController,
           required: true,
         ),
-        const SizedBox(height: 12),
-        UploadTextField(
-          label: 'Composer(s)',
-          placeholder: 'Who wrote this track?',
-          controller: composerController,
-          required: true,
-        ),
         const SizedBox(height: 22),
         const ArtifySectionTitle('Lyrics'),
         const SizedBox(height: 8),
-        UploadLyricsField(
-          controller: lyricsController,
-        ),
+        UploadLyricsField(controller: lyricsController),
       ],
     );
   }

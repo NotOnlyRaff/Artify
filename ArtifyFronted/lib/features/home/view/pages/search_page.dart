@@ -5,6 +5,7 @@ import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:client/features/home/song/widget/searchPage/search_explore_section.dart';
 import 'package:client/features/home/song/widget/searchPage/search_field.dart';
+import 'package:client/features/home/song/widget/searchPage/search_filter_chips.dart';
 import 'package:client/features/home/song/widget/searchPage/search_header.dart';
 import 'package:client/features/home/song/widget/searchPage/search_results_section.dart';
 import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
@@ -32,14 +33,37 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
+  /// Filtro categoria: all / songs / artists / albums.
+  SearchFilter _filter = SearchFilter.all;
+
+  /// Se l'utente ha espanso la sezione songs via "Show more".
+  /// Si resetta quando cambia query o filtro.
+  bool _songsExpanded = false;
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onQueryChanged(String value) {
+    setState(() {
+      _query = value;
+      _songsExpanded = false;
+    });
+  }
+
+  void _onFilterChanged(SearchFilter filter) {
+    setState(() {
+      _filter = filter;
+      _songsExpanded = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isSearching = _query.trim().isNotEmpty;
+
     // SONGS (lista completa, filtriamo lato client)
     final songsAsync = ref.watch(getAllSongsProvider);
 
@@ -66,11 +90,23 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         SearchField(
           controller: _searchController,
           query: _query,
-          onQueryChanged: (value) {
-            setState(() {
-              _query = value;
-            });
-          },
+          onQueryChanged: _onQueryChanged,
+        ),
+
+        // chip di filtro: visibili solo quando c'è una query attiva
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: isSearching
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: SearchFilterChips(
+                    current: _filter,
+                    onChanged: _onFilterChanged,
+                  ),
+                )
+              : const SizedBox.shrink(),
         ),
 
         const SizedBox(height: 16),
@@ -86,7 +122,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
               return AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
-                child: _query.trim().isEmpty
+                child: !isSearching
                     ? SearchExploreSection(
                         songs: songs,
                         onSongTap: (visibleSongs, index) => playSongsFromSource(
@@ -110,6 +146,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         artists: artists,
                         albums: albums,
                         query: _query,
+                        filter: _filter,
+                        songsCollapsedLimit: 5,
+                        songsExpanded: _songsExpanded,
+                        onToggleSongsExpanded: () {
+                          setState(() {
+                            _songsExpanded = !_songsExpanded;
+                          });
+                        },
                         onSongTap: (visibleSongs, index) => playSongsFromSource(
                           ref: ref,
                           songs: visibleSongs,

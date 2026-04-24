@@ -24,7 +24,7 @@ class DeleteAlbumTile extends StatelessWidget {
     }
 
     final subtitle =
-        subtitleParts.isEmpty ? 'Album' : subtitleParts.join(' • ');
+        subtitleParts.isEmpty ? 'Album' : subtitleParts.join(' - ');
 
     return Container(
       decoration: BoxDecoration(
@@ -34,7 +34,7 @@ class DeleteAlbumTile extends StatelessWidget {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        leading: _buildCover(),
+        leading: _AlbumCover(coverUrl: album.coverUrl),
         title: Text(
           album.title,
           maxLines: 1,
@@ -47,19 +47,30 @@ class DeleteAlbumTile extends StatelessWidget {
         ),
         subtitle: Text(
           subtitle,
-          style:
-              GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 12),
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white70,
+            fontSize: 12,
+          ),
         ),
         trailing: IconButton(
-          icon:
-              const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+          icon: const Icon(
+            Icons.delete_forever_rounded,
+            color: Colors.redAccent,
+          ),
           onPressed: onDelete,
         ),
       ),
     );
   }
+}
 
-  Widget _buildCover() {
+class _AlbumCover extends StatelessWidget {
+  final String? coverUrl;
+
+  const _AlbumCover({required this.coverUrl});
+
+  @override
+  Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -70,9 +81,21 @@ class DeleteAlbumTile extends StatelessWidget {
             colors: [Color(0xFF811F1A), Color(0xFF4B39EF)],
           ),
         ),
-        child: album.coverUrl != null
-            ? Image.network(album.coverUrl!, fit: BoxFit.cover)
-            : const Icon(Icons.album_rounded, color: Colors.white, size: 22),
+        child: coverUrl != null && coverUrl!.isNotEmpty
+            ? Image.network(
+                coverUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.album_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              )
+            : const Icon(
+                Icons.album_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
       ),
     );
   }

@@ -33,7 +33,7 @@ class ArtistAvatarSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Recommended: square image, min 512×512.',
+          'Recommended: square image, minimum 512x512.',
           textAlign: center ? TextAlign.center : TextAlign.start,
           style: GoogleFonts.plusJakartaSans(
             color: Colors.white38,

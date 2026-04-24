@@ -320,6 +320,74 @@ class SongRemoteRepository {
   }
 
   // ------------------------------------------------------------------ //
+  //  Aggiornamento canzone                                              //
+  // ------------------------------------------------------------------ //
+
+  Future<Either<AppFailure, SongModel>> updateSong({
+    required String songId,
+    required String songName,
+    required DateTime releaseDate,
+    String? composerId,
+    String? composerName,
+    String? producerId,
+    String? producerName,
+    String? genre,
+    String? lyrics,
+    String? mood,
+    List<SongArtistModel> artistLinks = const [],
+    required String token,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'song_name': songName.trim(),
+        'release_date': releaseDate.toIso8601String().split('T').first,
+        'composer_id':
+            composerId?.trim().isNotEmpty == true ? composerId!.trim() : null,
+        'composer_name': composerName?.trim().isNotEmpty == true
+            ? composerName!.trim()
+            : null,
+        'producer_id':
+            producerId?.trim().isNotEmpty == true ? producerId!.trim() : null,
+        'producer_name': producerName?.trim().isNotEmpty == true
+            ? producerName!.trim()
+            : null,
+        'genre': genre?.trim().isNotEmpty == true ? genre!.trim() : null,
+        'lyrics': lyrics?.trim().isNotEmpty == true ? lyrics!.trim() : null,
+        'mood': mood?.trim().isNotEmpty == true ? mood!.trim() : null,
+        'artist_links': artistLinks
+            .where((link) => link.artistId?.trim().isNotEmpty == true)
+            .map(
+              (link) => {
+                'artist_id': link.artistId!.trim(),
+                'role': link.role.value,
+              },
+            )
+            .toList(growable: false),
+      };
+
+      final res = await client.patch(
+        _uri('/songs/$songId'),
+        headers: _jsonHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      final bodyMap = _tryParseObject(res.body);
+      if (res.statusCode != 200) {
+        return Left(AppFailure(_extractError(bodyMap,
+            fallback: 'Song update failed (${res.statusCode})')));
+      }
+
+      if (bodyMap == null) {
+        return Left(AppFailure('Invalid response format'));
+      }
+
+      return Right(SongModel.fromMap(bodyMap));
+    } catch (e) {
+      return Left(AppFailure(e.toString()));
+    }
+  }
+
+  // ------------------------------------------------------------------ //
   //  Preferiti                                                          //
   // ------------------------------------------------------------------ //
 

@@ -11,7 +11,7 @@ from middleware.auth_middleware import auth_middleware, require_role
 from models.enums import SongArtistRole, UserRole
 from models.user import User
 from schemas.favorite_schema import FavoriteCreate
-from schemas.song_schema import SongArtistLinkIn, SongOut
+from schemas.song_schema import SongArtistLinkIn, SongOut, SongUpdate
 from services.song_service import SongService
 
 router = APIRouter(tags=["songs"])
@@ -170,6 +170,47 @@ def get_song(
     _=Depends(auth_middleware),
 ):
     return SongService.get_song_by_id(db=db, song_id=song_id)
+
+
+# ------------------------------------------------------------------ #
+#  Aggiornamento                                                      #
+# ------------------------------------------------------------------ #
+
+@router.patch("/{song_id}", response_model=SongOut)
+def update_song(
+    song_id: str,
+    payload: SongUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
+):
+    if current_user.role == UserRole.ARTIST:
+        if not current_user.artist_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No linked artist profile",
+            )
+
+        if payload.artist_links is not None:
+            artist_ids = {link.artist_id for link in payload.artist_links}
+            if current_user.artist_id not in artist_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="The linked artist profile must remain attached to the song",
+                )
+
+    elif current_user.role == UserRole.ADMIN:
+        if payload.artist_links is not None and not payload.artist_links:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one artist is required",
+            )
+
+    return SongService.update_song(
+        db=db,
+        song_id=song_id,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 # ------------------------------------------------------------------ #

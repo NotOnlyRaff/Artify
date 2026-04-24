@@ -62,6 +62,22 @@ class AlbumUpdate(BaseModel):
     genre: Optional[str] = Field(default=None, max_length=30)
 
     artist_ids: Optional[List[str]] = None
+    song_links: Optional[List[AlbumSongAttachIn]] = None
+
+    @model_validator(mode="after")
+    def validate_song_links(self):
+        if self.song_links is None:
+            return self
+
+        song_ids = [link.song_id for link in self.song_links]
+        if len(song_ids) != len(set(song_ids)):
+            raise ValueError("Duplicate song_id values are not allowed in song_links")
+
+        track_numbers = [link.track_number for link in self.song_links]
+        if len(track_numbers) != len(set(track_numbers)):
+            raise ValueError("Duplicate track_number values are not allowed in song_links")
+
+        return self
 
 
 class AlbumAddSongs(BaseModel):

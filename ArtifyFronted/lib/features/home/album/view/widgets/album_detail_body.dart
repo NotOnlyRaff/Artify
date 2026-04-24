@@ -5,6 +5,8 @@ import 'package:client/features/home/artist/view/widgets/detailpage/section_card
 import 'package:client/features/home/song/model/playback_queue_state.dart';
 import 'package:client/features/home/song/model/song_model.dart';
 import 'package:client/features/home/song/providers/current_song_notifier.dart';
+import 'package:client/features/home/song/providers/playback_queue_controller.dart';
+import 'package:client/features/home/song/view/widgets/queue_swipe_wrapper.dart';
 import 'package:client/features/home/song/view/widgets/song_playback_actions.dart';
 import 'package:client/features/home/song/viewmodel/song_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -169,12 +171,28 @@ class _AlbumDetailBodyState extends ConsumerState<AlbumDetailBody> {
     }
   }
 
+  Future<void> _queueTrack(
+    AlbumModel album,
+    AlbumTrack track,
+    SongModel? resolvedSong,
+  ) async {
+    final SongModel song =
+        resolvedSong ?? await ref.read(getSongProvider(track.songId).future);
+
+    await ref.read(playbackQueueControllerProvider.notifier).addToQueue(
+          song,
+          sourceType: PlaybackSourceType.album,
+          sourceId: album.id,
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final albumAsync = ref.watch(getAlbumProvider(widget.albumId));
     final playableSongsAsync =
         ref.watch(albumPlayableSongsProvider(widget.albumId));
-    final currentSong = ref.watch(currentSongNotifierProvider);
+    final currentSongState = ref.watch(currentSongNotifierProvider);
+    final currentSong = currentSongState.song;
 
     return albumAsync.when(
       data: (album) {
@@ -271,14 +289,22 @@ class _AlbumDetailBodyState extends ConsumerState<AlbumDetailBody> {
 
                       return Padding(
                         padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
-                        child: _AlbumTrackRow(
-                          index: track.trackNumber ?? index + 1,
-                          album: album,
-                          track: track,
-                          song: song,
-                          isCurrent: isCurrent,
-                          onTap: () => _playTrack(album, track),
-                          onMore: () => _openTrackActions(album, track, song),
+                        child: QueueSwipeWrapper(
+                          swipeKey: ValueKey(
+                            'album-${album.id}-${track.songId}-${track.trackNumber ?? index}',
+                          ),
+                          successMessage:
+                              'Added "${song?.songName ?? track.songName ?? 'Track ${track.trackNumber ?? index + 1}'}" to queue',
+                          onQueue: () => _queueTrack(album, track, song),
+                          child: _AlbumTrackRow(
+                            index: track.trackNumber ?? index + 1,
+                            album: album,
+                            track: track,
+                            song: song,
+                            isCurrent: isCurrent,
+                            onTap: () => _playTrack(album, track),
+                            onMore: () => _openTrackActions(album, track, song),
+                          ),
                         ),
                       );
                     }).toList(),

@@ -42,7 +42,8 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
       state = restored.copyWith(isRestoring: false);
 
-      if (ref.read(currentSongNotifierProvider) == null &&
+      // Lo stato del player è ora `CurrentSongState`: controlliamo `.song`.
+      if (ref.read(currentSongNotifierProvider).song == null &&
           restored.currentSong != null) {
         await _player.applyRepeatMode(restored.repeatMode);
         await _player.updateSong(
@@ -53,7 +54,8 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       }
     } catch (error, stackTrace) {
       debugPrint(
-          '[PlaybackQueueController] restore error: $error\n$stackTrace');
+        '[PlaybackQueueController] restore error: $error\n$stackTrace',
+      );
       state = const PlaybackQueueState(isRestoring: false);
     } finally {
       _isRestoring = false;
@@ -66,18 +68,6 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       return;
     }
     await _localRepository.saveState(state);
-  }
-
-  Future<void> _refreshPlayerQueueIfNeeded({
-    bool? autoplay,
-    bool preservePosition = true,
-  }) async {
-    if (!state.hasCurrent) return;
-
-    await _player.refreshQueueSource(
-      autoplay: autoplay,
-      preservePosition: preservePosition,
-    );
   }
 
   Future<void> _replaceQueueAndPlay({
@@ -124,6 +114,25 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
         isManuallyQueued: isManuallyQueued,
       );
     }).toList(growable: false);
+  }
+
+  int _manualQueueInsertEnd() {
+    final currentIndex = state.currentIndex;
+    if (currentIndex == null) return state.items.length;
+
+    var index = currentIndex + 1;
+    while (index < state.items.length && state.items[index].isManuallyQueued) {
+      index++;
+    }
+    return index;
+  }
+
+  bool _isInsideManualQueueBlock(int index) {
+    final currentIndex = state.currentIndex;
+    if (currentIndex == null) return false;
+
+    final manualQueueEnd = _manualQueueInsertEnd();
+    return index > currentIndex && index < manualQueueEnd;
   }
 
   void syncSingleSongQueue(
@@ -208,21 +217,24 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       return;
     }
 
-    final insertIndex = (state.currentIndex ?? -1) + 1;
-    final updated = [...state.items];
-    updated.insertAll(
-      insertIndex.clamp(0, updated.length),
-      _buildItems(
-        [song],
-        sourceType: sourceType,
-        sourceId: sourceId,
-        isManuallyQueued: true,
-      ),
+    final insertIndex =
+        ((state.currentIndex ?? -1) + 1).clamp(0, state.items.length);
+    final insertedItems = _buildItems(
+      [song],
+      sourceType: sourceType,
+      sourceId: sourceId,
+      isManuallyQueued: true,
     );
+
+    final updated = [...state.items];
+    updated.insertAll(insertIndex, insertedItems);
 
     state = state.copyWith(items: updated);
     await _persistState();
-    await _refreshPlayerQueueIfNeeded();
+    await _player.insertIntoQueueSequence(
+      insertIndex,
+      insertedItems.map((item) => item.song).toList(growable: false),
+    );
   }
 
   Future<void> addToQueue(
@@ -239,19 +251,23 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       return;
     }
 
-    final updated = [
-      ...state.items,
-      ..._buildItems(
-        [song],
-        sourceType: sourceType,
-        sourceId: sourceId,
-        isManuallyQueued: true,
-      ),
-    ];
+    final insertIndex = _manualQueueInsertEnd().clamp(0, state.items.length);
+    final insertedItems = _buildItems(
+      [song],
+      sourceType: sourceType,
+      sourceId: sourceId,
+      isManuallyQueued: true,
+    );
+
+    final updated = [...state.items];
+    updated.insertAll(insertIndex, insertedItems);
 
     state = state.copyWith(items: updated);
     await _persistState();
-    await _refreshPlayerQueueIfNeeded();
+    await _player.insertIntoQueueSequence(
+      insertIndex,
+      insertedItems.map((item) => item.song).toList(growable: false),
+    );
   }
 
   int? _nextIndex({required bool fromCompletion}) {
@@ -291,18 +307,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
   }
 
   Future<bool> handleTrackCompleted() async {
-    final nextIndex = _nextIndex(fromCompletion: true);
-    if (nextIndex == null) {
-      return false;
-    }
-
-    state = state.copyWith(currentIndex: nextIndex);
-    await _persistState();
-    await _player.updateSong(
-      state.currentSong!,
-      syncQueue: false,
-    );
-    return true;
+    return false;
   }
 
   Future<bool> skipToNext() async {
@@ -313,10 +318,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
     state = state.copyWith(currentIndex: nextIndex);
     await _persistState();
-    await _player.updateSong(
-      state.currentSong!,
-      syncQueue: false,
-    );
+    await _player.seekToQueueIndex(nextIndex);
     return true;
   }
 
@@ -325,22 +327,20 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
   }) async {
     final position = _player.audioPlayer.position;
     if (position > restartThreshold) {
-      _player.seek(0);
+      // `seek` è ora Future<void> ed entra nella mutation queue del player.
+      unawaited(_player.seek(0));
       return true;
     }
 
     final previousIndex = _previousIndex();
     if (previousIndex == null) {
-      _player.seek(0);
+      unawaited(_player.seek(0));
       return false;
     }
 
     state = state.copyWith(currentIndex: previousIndex);
     await _persistState();
-    await _player.updateSong(
-      state.currentSong!,
-      syncQueue: false,
-    );
+    await _player.seekToQueueIndex(previousIndex);
     return true;
   }
 
@@ -349,11 +349,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
     state = state.copyWith(currentIndex: index);
     await _persistState();
-    await _player.updateSong(
-      state.currentSong!,
-      syncQueue: false,
-      autoplay: autoplay,
-    );
+    await _player.seekToQueueIndex(index, autoplay: autoplay);
     return true;
   }
 
@@ -361,8 +357,14 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
     final index = state.items.indexWhere((item) => item.queueId == queueId);
     if (index == -1) return;
 
-    final updated = [...state.items]..removeAt(index);
+    final targetItem = state.items[index];
     final currentIndex = state.currentIndex;
+    if (!targetItem.isManuallyQueued && currentIndex != index) {
+      return;
+    }
+
+    final updated = [...state.items]..removeAt(index);
+    // `isPlaying` resta accessibile come getter sul notifier — compat API.
     final wasPlaying = _player.isPlaying;
 
     if (updated.isEmpty) {
@@ -375,6 +377,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
     if (currentIndex == null) {
       state = state.copyWith(items: updated);
       await _persistState();
+      await _player.removeFromQueueSequence(index);
       return;
     }
 
@@ -384,18 +387,14 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
         currentIndex: currentIndex - 1,
       );
       await _persistState();
-      await _refreshPlayerQueueIfNeeded(
-        autoplay: wasPlaying,
-      );
+      await _player.removeFromQueueSequence(index);
       return;
     }
 
     if (index > currentIndex) {
       state = state.copyWith(items: updated);
       await _persistState();
-      await _refreshPlayerQueueIfNeeded(
-        autoplay: wasPlaying,
-      );
+      await _player.removeFromQueueSequence(index);
       return;
     }
 
@@ -407,9 +406,9 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       currentIndex: replacementIndex,
     );
     await _persistState();
-    await _player.updateSong(
-      state.currentSong!,
-      syncQueue: false,
+    await _player.removeFromQueueSequence(
+      index,
+      replacementIndex: replacementIndex,
       autoplay: wasPlaying,
     );
   }
@@ -420,6 +419,12 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
         newIndex < 0 ||
         newIndex >= state.items.length ||
         oldIndex == newIndex) {
+      return;
+    }
+
+    if (!_isInsideManualQueueBlock(oldIndex) ||
+        !_isInsideManualQueueBlock(newIndex) ||
+        !state.items[oldIndex].isManuallyQueued) {
       return;
     }
 
@@ -443,7 +448,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
       currentIndex: currentIndex,
     );
     await _persistState();
-    await _refreshPlayerQueueIfNeeded();
+    await _player.moveInQueueSequence(oldIndex, newIndex);
   }
 
   Future<void> clearQueue({bool stopPlayback = true}) async {
@@ -456,6 +461,26 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
 
     if (stopPlayback) {
       await _player.stopAndClear();
+    }
+  }
+
+  Future<void> clearQueuedItems() async {
+    final queuedEntries = state.queuedEntries;
+    if (queuedEntries.isEmpty) return;
+
+    final updated = [...state.items];
+    for (final entry in queuedEntries.reversed) {
+      updated.removeAt(entry.absoluteIndex);
+    }
+
+    state = state.copyWith(
+      items: updated,
+      isRestoring: false,
+    );
+    await _persistState();
+
+    for (final entry in queuedEntries.reversed) {
+      await _player.removeFromQueueSequence(entry.absoluteIndex);
     }
   }
 

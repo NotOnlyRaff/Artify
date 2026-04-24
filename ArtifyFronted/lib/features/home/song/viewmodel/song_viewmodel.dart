@@ -179,6 +179,54 @@ class SongViewModel extends _$SongViewModel {
   }
 
   /// ────────────── DELETE SONG ──────────────
+  Future<void> updateSong({
+    required String songId,
+    required String songName,
+    required DateTime releaseDate,
+    String? composerId,
+    String? composerName,
+    String? producerId,
+    String? producerName,
+    String? genre,
+    String? lyrics,
+    String? mood,
+    List<SongArtistModel> artistLinks = const [],
+  }) async {
+    state = const AsyncValue.loading();
+
+    try {
+      final token = await _requireToken();
+
+      final res = await _songRepository.updateSong(
+        songId: songId,
+        songName: songName,
+        releaseDate: releaseDate,
+        composerId: composerId,
+        composerName: composerName,
+        producerId: producerId,
+        producerName: producerName,
+        genre: genre,
+        lyrics: lyrics,
+        mood: mood,
+        artistLinks: artistLinks,
+        token: token,
+      );
+
+      switch (res) {
+        case Left(value: final failure):
+          state = AsyncValue.error(failure.message, StackTrace.current);
+
+        case Right(value: final song):
+          ref.invalidate(getSongProvider(songId));
+          ref.invalidate(getAllSongsProvider);
+          ref.invalidate(getFavSongsProvider);
+          state = AsyncValue.data(song);
+      }
+    } catch (e) {
+      state = AsyncValue.error(e.toString(), StackTrace.current);
+    }
+  }
+
   Future<void> deleteSong({required String songId}) async {
     state = const AsyncValue.loading();
 

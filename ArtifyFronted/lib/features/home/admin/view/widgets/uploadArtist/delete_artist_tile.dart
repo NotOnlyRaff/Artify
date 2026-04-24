@@ -20,7 +20,7 @@ class DeleteArtistTile extends StatelessWidget {
     final subtitle = [
       if (artist.slug != null && artist.slug!.isNotEmpty) '@${artist.slug}',
       if (artist.country != null && artist.country!.isNotEmpty) artist.country!,
-    ].join(' • ');
+    ].join(' - ');
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -34,21 +34,32 @@ class DeleteArtistTile extends StatelessWidget {
         child: ListTile(
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          leading: CircleAvatar(
-            radius: 22,
-            backgroundColor: const Color(0xFF24132A),
-            child: Text(
-              title.isNotEmpty ? title[0].toUpperCase() : '?',
-              style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white, fontWeight: FontWeight.w700),
-            ),
-          ),
+          leading: artist.imageUrl != null && artist.imageUrl!.isNotEmpty
+              ? CircleAvatar(
+                  radius: 22,
+                  backgroundImage: NetworkImage(artist.imageUrl!),
+                  onBackgroundImageError: (_, __) {},
+                )
+              : CircleAvatar(
+                  radius: 22,
+                  backgroundColor: const Color(0xFF24132A),
+                  child: Text(
+                    title.isNotEmpty ? title[0].toUpperCase() : '?',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
           title: Text(
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.plusJakartaSans(
-                color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           subtitle: subtitle.isEmpty
               ? null
@@ -57,10 +68,15 @@ class DeleteArtistTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white70, fontSize: 12),
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
                 ),
-          trailing: const Icon(Icons.delete_outline_rounded,
-              color: Colors.redAccent, size: 20),
+          trailing: const Icon(
+            Icons.delete_outline_rounded,
+            color: Colors.redAccent,
+            size: 20,
+          ),
         ),
       ),
     );

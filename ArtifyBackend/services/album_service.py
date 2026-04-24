@@ -86,6 +86,62 @@ class AlbumService:
         return song_map
 
     @staticmethod
+    def _ordered_song_links(song_links) -> list[dict[str, int | str]]:
+        ordered_links: list[dict[str, int | str]] = []
+
+        for index, link in enumerate(song_links or [], start=1):
+            if isinstance(link, dict):
+                song_id = str(link.get("song_id", "")).strip()
+            else:
+                song_id = str(getattr(link, "song_id", "")).strip()
+
+            if not song_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="One or more song IDs are invalid",
+                )
+
+            ordered_links.append({"song_id": song_id, "track_number": index})
+
+        return ordered_links
+
+    @staticmethod
+    def _sync_album_song_links(
+        album: Album,
+        song_links: list[dict[str, int | str]],
+        song_map: dict[str, Song],
+        db: Session,
+    ) -> None:
+        existing_links = {
+            link.song_id: link
+            for link in db.query(AlbumSong)
+            .filter(AlbumSong.album_id == album.id)
+            .all()
+        }
+        desired_song_ids = {str(link["song_id"]) for link in song_links}
+
+        for song_id, link in existing_links.items():
+            if song_id not in desired_song_ids:
+                db.delete(link)
+
+        for link in song_links:
+            song_id = str(link["song_id"])
+            track_number = int(link["track_number"])
+            existing = existing_links.get(song_id)
+
+            if existing is None:
+                db.add(
+                    AlbumSong(
+                        album=album,
+                        song=song_map[song_id],
+                        track_number=track_number,
+                    )
+                )
+            else:
+                existing.song = song_map[song_id]
+                existing.track_number = track_number
+
+    @staticmethod
     def _ensure_manageable_artist_ids(
         requester: User,
         artist_ids: list[str],
@@ -245,7 +301,8 @@ class AlbumService:
 
         # FIX: usa payload.song_links (schema aggiornato) invece del vecchio
         # song_ids + new_songs che mescolava creazione e collegamento.
-        song_ids = [link.song_id for link in payload.song_links]
+        song_links = AlbumService._ordered_song_links(payload.song_links)
+        song_ids = [str(link["song_id"]) for link in song_links]
         song_map = AlbumService._resolve_songs(db, song_ids)
 
         # FIX: id non passato — default del model.
@@ -276,10 +333,10 @@ class AlbumService:
             db_album.album_song_links = [
                 AlbumSong(
                     album=db_album,
-                    song=song_map[link.song_id],
-                    track_number=link.track_number,
+                    song=song_map[str(link["song_id"])],
+                    track_number=int(link["track_number"]),
                 )
-                for link in payload.song_links
+                for link in song_links
             ]
 
             db.commit()
@@ -343,24 +400,19 @@ class AlbumService:
                     )
 
             if "song_links" in update_dict:
-                song_links = update_dict["song_links"] or []
-                song_ids = AlbumService._normalize_ids(
-                    [link["song_id"] for link in song_links]
+                song_links = AlbumService._ordered_song_links(
+                    update_dict["song_links"] or []
                 )
+                song_ids = [str(link["song_id"]) for link in song_links]
                 song_map = AlbumService._resolve_songs(db, song_ids)
             
-                album.album_song_links.clear()
-                db.flush()  # Evita IntegrityError su UniqueConstraint(album_id, song_id)
-                            # quando riordinamenti coinvolgono le stesse song già linkate.
+                AlbumService._sync_album_song_links(
+                    album=album,
+                    song_links=song_links,
+                    song_map=song_map,
+                    db=db,
+                )
             
-                for link in song_links:
-                    album.album_song_links.append(
-                        AlbumSong(
-                            album=album,
-                            song=song_map[link["song_id"]],
-                            track_number=link["track_number"],
-                        )
-                    )
 
             db.commit()
 

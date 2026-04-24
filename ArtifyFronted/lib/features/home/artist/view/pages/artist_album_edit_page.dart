@@ -580,6 +580,7 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
                               )
                             else
                               ReorderableListView.builder(
+                                buildDefaultDragHandles: false,
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: _tracks.length,
@@ -686,9 +687,12 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
                                             color: Colors.white54,
                                           ),
                                         ),
-                                        const Icon(
-                                          Icons.drag_handle_rounded,
-                                          color: Colors.white38,
+                                        ReorderableDragStartListener(
+                                          index: index,
+                                          child: const Icon(
+                                            Icons.drag_handle_rounded,
+                                            color: Colors.white38,
+                                          ),
                                         ),
                                       ],
                                     ),

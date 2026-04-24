@@ -138,8 +138,13 @@ class AlbumService:
                     )
                 )
             else:
-                existing.song = song_map[song_id]
-                existing.track_number = track_number
+                db.query(AlbumSong).filter(
+                    AlbumSong.album_id == album.id,
+                    AlbumSong.song_id == song_id,
+                ).update(
+                    {"track_number": track_number},
+                    synchronize_session=False,
+                )
 
     @staticmethod
     def _ensure_manageable_artist_ids(

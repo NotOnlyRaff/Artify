@@ -62,6 +62,11 @@ class AlbumRemoteRepository {
     return fallback;
   }
 
+  String _debugPreview(String value, {int maxLength = 1600}) {
+    if (value.length <= maxLength) return value;
+    return '${value.substring(0, maxLength)}...<truncated ${value.length} chars>';
+  }
+
   // ──────────────── UPLOAD ALBUM COVER ────────────────
 
   Future<Either<AppFailure, String>> uploadAlbumCover({
@@ -256,6 +261,7 @@ class AlbumRemoteRepository {
     List<String>? artistIds,
     List<String>? songIds,
     required String token,
+    String? debugId,
   }) async {
     try {
       final body = <String, dynamic>{};
@@ -291,12 +297,16 @@ class AlbumRemoteRepository {
             .toList();
       }
 
-      if (kDebugMode && body['song_links'] != null) {
-        debugPrint(
-          '[AlbumRemoteRepository] PATCH /albums/$albumId song_links='
-          '${jsonEncode(body['song_links'])}',
-        );
+      final debugLabel = debugId ?? 'no-debug-id';
+      final uri = _uri('/albums/$albumId');
+      final headers = _jsonHeaders(token);
+      if (debugId != null && debugId.isNotEmpty) {
+        headers['x-artify-debug-id'] = debugId;
       }
+
+      debugPrint(
+        '[AlbumRemoteRepository][$debugLabel] PATCH $uri body=${jsonEncode(body)}',
+      );
 
       if (body.isEmpty) {
         return Left(AppFailure('No fields provided for album update'));
@@ -304,11 +314,15 @@ class AlbumRemoteRepository {
 
       // FIX: /albums/{id}
       final res = await client.patch(
-        _uri('/albums/$albumId'),
-        headers: _jsonHeaders(token),
+        uri,
+        headers: headers,
         body: jsonEncode(body),
       );
       final bodyMap = _tryParseObject(res.body);
+      debugPrint(
+        '[AlbumRemoteRepository][$debugLabel] RESPONSE '
+        'status=${res.statusCode} body=${_debugPreview(res.body)}',
+      );
 
       if (res.statusCode != 200) {
         return Left(AppFailure(_extractError(bodyMap,

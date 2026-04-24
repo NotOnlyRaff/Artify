@@ -4,6 +4,7 @@ import 'package:client/features/auth/repositories/auth_local_repository.dart';
 import 'package:client/features/home/album/model/album_model.dart';
 import 'package:client/features/home/album/repositories/album_local_repository.dart';
 import 'package:client/features/home/album/repositories/album_remote_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -57,11 +58,16 @@ class AlbumViewModel extends _$AlbumViewModel {
   @override
   AsyncValue? build() => null;
 
+  void _debugAlbumUpdate(String debugId, String message) {
+    debugPrint('[AlbumViewModel][$debugId] $message');
+  }
+
   Future<String> _requireToken() async {
     // FIX: legge da flutter_secure_storage tramite provider.
     final token = await _authLocalRepository.getToken();
-    if (token == null || token.isEmpty)
+    if (token == null || token.isEmpty) {
       throw Exception('User not authenticated');
+    }
     return token;
   }
 
@@ -136,11 +142,17 @@ class AlbumViewModel extends _$AlbumViewModel {
     String? coverUrl,
     List<String>? artistIds,
     List<String>? songIds,
+    String? debugId,
   }) async {
     state = const AsyncValue.loading();
+    final debugLabel = debugId ?? 'no-debug-id';
 
     try {
       final token = await _requireToken();
+      _debugAlbumUpdate(
+        debugLabel,
+        'START albumId=$albumId artistIds=$artistIds songIds=$songIds',
+      );
 
       final res = await _remote.updateAlbum(
         albumId: albumId,
@@ -153,13 +165,19 @@ class AlbumViewModel extends _$AlbumViewModel {
         artistIds: artistIds,
         songIds: songIds,
         token: token,
+        debugId: debugId,
       );
 
       switch (res) {
         case Left(value: final failure):
+          _debugAlbumUpdate(debugLabel, 'FAILURE ${failure.message}');
           state = AsyncValue.error(failure.message, StackTrace.current);
 
         case Right(value: final album):
+          _debugAlbumUpdate(
+            debugLabel,
+            'SUCCESS responseOrder=${album.tracks.asMap().entries.map((entry) => '${entry.key + 1}:${entry.value.songId}:${entry.value.trackNumber}').toList()}',
+          );
           ref.invalidate(getAllAlbumsProvider);
           ref.invalidate(getAlbumProvider(albumId));
           try {
@@ -168,6 +186,7 @@ class AlbumViewModel extends _$AlbumViewModel {
           state = AsyncValue.data(album);
       }
     } catch (e) {
+      _debugAlbumUpdate(debugLabel, 'EXCEPTION $e');
       state = AsyncValue.error(e.toString(), StackTrace.current);
     }
   }

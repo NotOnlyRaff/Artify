@@ -1,6 +1,7 @@
 from typing import Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -91,15 +92,26 @@ def get_album(
 def update_album(
     album_id: str,
     payload: AlbumUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     # FIX: require_role invece di auth_middleware generico.
     current_user: User = Depends(require_role([UserRole.ARTIST, UserRole.ADMIN])),
 ):
+    debug_id = request.headers.get("x-artify-debug-id") or f"server-{uuid4().hex[:8]}"
+    print(
+        "[ALBUM_UPDATE_ROUTE]"
+        f"[{debug_id}] PATCH /albums/{album_id} "
+        f"user={current_user.id} role={current_user.role} "
+        f"fields={sorted(payload.model_fields_set)} "
+        f"song_links={payload.song_links}",
+        flush=True,
+    )
     return AlbumService.update_album(
         album_id=album_id,
         payload=payload,
         db=db,
         requester_id=current_user.id,
+        debug_id=debug_id,
     )
 
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:client/core/theme/app_pallete.dart';
 import 'package:client/core/utils.dart';
 import 'package:client/features/home/album/model/album_model.dart';
@@ -52,6 +54,21 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
   String _artistSearchQuery = '';
   String _trackSearchQuery = '';
 
+  List<Map<String, Object?>> _debugTrackOrder() {
+    return _tracks.asMap().entries.map((entry) {
+      final track = entry.value;
+      return {
+        'position': entry.key + 1,
+        'songId': track.songId,
+        'title': track.title,
+      };
+    }).toList(growable: false);
+  }
+
+  void _debugAlbumEdit(String debugId, String message) {
+    debugPrint('[ArtistAlbumEditPage][$debugId] $message');
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -101,6 +118,15 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
       );
 
     _seeded = true;
+    _debugAlbumEdit(
+      'seed-${widget.albumId}',
+      'SEEDED albumTracks=${jsonEncode(album.tracks.asMap().entries.map((entry) => {
+            'position': entry.key + 1,
+            'songId': entry.value.songId,
+            'trackNumber': entry.value.trackNumber,
+            'title': entry.value.songName,
+          }).toList())} editableOrder=${jsonEncode(_debugTrackOrder())}',
+    );
   }
 
   Future<void> _pickCover() async {
@@ -147,10 +173,16 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
   }
 
   void _moveTrack(int from, int to) {
+    final debugId = 'reorder-${DateTime.now().millisecondsSinceEpoch}';
+    final before = _debugTrackOrder();
     setState(() {
       final item = _tracks.removeAt(from);
       _tracks.insert(to, item);
     });
+    _debugAlbumEdit(
+      debugId,
+      'MOVE from=$from to=$to before=${jsonEncode(before)} after=${jsonEncode(_debugTrackOrder())}',
+    );
   }
 
   String _artistLabel(ArtistModel artist) {
@@ -195,6 +227,11 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
     }
 
     setState(() => _saving = true);
+    final debugId = 'album-update-${DateTime.now().millisecondsSinceEpoch}';
+    _debugAlbumEdit(
+      debugId,
+      'SAVE_START albumId=${widget.albumId} currentEditableOrder=${jsonEncode(_debugTrackOrder())}',
+    );
 
     try {
       String? coverUrl = album.coverUrl;
@@ -220,6 +257,12 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
             .where((artist) => artist.id != widget.studioArtist.id)
             .map((artist) => artist.id),
       ];
+      final songIds =
+          _tracks.map((track) => track.songId).toList(growable: false);
+      _debugAlbumEdit(
+        debugId,
+        'SAVE_PAYLOAD artistIds=$artistIds songIds=$songIds coverChanged=${_selectedCover != null}',
+      );
 
       await ref.read(albumViewModelProvider.notifier).updateAlbum(
             albumId: widget.albumId,
@@ -230,16 +273,18 @@ class _ArtistAlbumEditPageState extends ConsumerState<ArtistAlbumEditPage> {
             genre: _emptyToNull(_genreController.text),
             coverUrl: coverUrl,
             artistIds: artistIds,
-            songIds:
-                _tracks.map((track) => track.songId).toList(growable: false),
+            songIds: songIds,
+            debugId: debugId,
           );
 
       final state = ref.read(albumViewModelProvider);
       if (state?.hasError == true) {
+        _debugAlbumEdit(debugId, 'SAVE_ERROR state=$state');
         if (!mounted) return;
         showSnackBar(context, state!.error.toString());
         return;
       }
+      _debugAlbumEdit(debugId, 'SAVE_SUCCESS state=$state');
 
       ref.invalidate(getArtistProvider(widget.studioArtist.id));
       ref.invalidate(getAlbumProvider(widget.albumId));

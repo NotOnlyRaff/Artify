@@ -87,6 +87,21 @@ class AlbumService:
         return song_map
 
     @staticmethod
+    def _album_debug(debug_id: str | None, message: str) -> None:
+        label = debug_id or "no-debug-id"
+        print(f"[ALBUM_UPDATE_SERVICE][{label}] {message}", flush=True)
+
+    @staticmethod
+    def _album_song_order(db: Session, album_id: str) -> list[tuple[str, int | None]]:
+        rows = (
+            db.query(AlbumSong.song_id, AlbumSong.track_number)
+            .filter(AlbumSong.album_id == album_id)
+            .order_by(AlbumSong.track_number.asc().nullslast(), AlbumSong.song_id.asc())
+            .all()
+        )
+        return [(row.song_id, row.track_number) for row in rows]
+
+    @staticmethod
     def _ordered_song_links(song_links) -> list[dict[str, int | str]]:
         ordered_links: list[dict[str, int | str]] = []
 
@@ -112,6 +127,7 @@ class AlbumService:
         song_links: list[dict[str, int | str]],
         song_map: dict[str, Song],
         db: Session,
+        debug_id: str | None = None,
     ) -> None:
         # Rebuild through Core SQL so the DB row order is the source of truth
         # and ORM relationship/cache state cannot keep stale track numbers alive.
@@ -132,14 +148,32 @@ class AlbumService:
                 }
             )
 
-        db.execute(delete(AlbumSong).where(AlbumSong.album_id == album.id))
+        AlbumService._album_debug(
+            debug_id,
+            f"SYNC prepared_rows={[(row['song_id'], row['track_number']) for row in rows]}",
+        )
+
+        delete_result = db.execute(delete(AlbumSong).where(AlbumSong.album_id == album.id))
+        AlbumService._album_debug(
+            debug_id,
+            f"SYNC delete album_songs rowcount={getattr(delete_result, 'rowcount', None)}",
+        )
         db.flush()
+        AlbumService._album_debug(
+            debug_id,
+            f"SYNC after_delete_order={AlbumService._album_song_order(db, album.id)}",
+        )
 
         if rows:
             db.execute(insert(AlbumSong), rows)
             db.flush()
+            AlbumService._album_debug(debug_id, f"SYNC inserted_rows={len(rows)}")
 
         db.expire(album, ["album_song_links"])
+        AlbumService._album_debug(
+            debug_id,
+            f"SYNC after_insert_order={AlbumService._album_song_order(db, album.id)}",
+        )
 
     @staticmethod
     def _ensure_manageable_artist_ids(
@@ -370,6 +404,7 @@ class AlbumService:
         payload: AlbumUpdate,   # FIX: type annotation esplicita
         db: Session,
         requester_id: str,
+        debug_id: str | None = None,
     ) -> Album:
         requester = AlbumService._get_requester_or_404(db, requester_id)
         album = AlbumService.get_album_or_404(album_id, db)
@@ -377,6 +412,19 @@ class AlbumService:
 
         try:
             update_dict = payload.model_dump(exclude_unset=True)
+            AlbumService._album_debug(
+                debug_id,
+                f"START album_id={album_id} requester_id={requester.id} "
+                f"role={requester.role} artist_id={requester.artist_id}",
+            )
+            AlbumService._album_debug(
+                debug_id,
+                f"PAYLOAD fields={sorted(payload.model_fields_set)} update_dict={update_dict}",
+            )
+            AlbumService._album_debug(
+                debug_id,
+                f"DB before_order={AlbumService._album_song_order(db, album.id)}",
+            )
 
             for field in ("title", "release_date", "label", "album_type", "genre"):
                 if field in update_dict:
@@ -406,10 +454,14 @@ class AlbumService:
                 )
                 song_ids = [str(link["song_id"]) for link in song_links]
                 song_map = AlbumService._resolve_songs(db, song_ids)
-                print(
-                    f"[AlbumService] update album {album_id} received order: "
+                AlbumService._album_debug(
+                    debug_id,
+                    "SONG_LINKS normalized_order="
                     f"{[(link['song_id'], link['track_number']) for link in song_links]}",
-                    flush=True,
+                )
+                AlbumService._album_debug(
+                    debug_id,
+                    f"SONG_LINKS resolved_song_ids={sorted(song_map.keys())}",
                 )
 
                 AlbumService._sync_album_song_links(
@@ -417,41 +469,59 @@ class AlbumService:
                     song_links=song_links,
                     song_map=song_map,
                     db=db,
+                    debug_id=debug_id,
                 )
                 db.flush()
-                persisted_order = (
-                    db.query(AlbumSong.song_id, AlbumSong.track_number)
-                    .filter(AlbumSong.album_id == album.id)
-                    .order_by(AlbumSong.track_number.asc())
-                    .all()
+                AlbumService._album_debug(
+                    debug_id,
+                    f"DB before_commit_order={AlbumService._album_song_order(db, album.id)}",
                 )
-                print(
-                    f"[AlbumService] update album {album_id} persisted order: "
-                    f"{[(row.song_id, row.track_number) for row in persisted_order]}",
-                    flush=True,
+            else:
+                AlbumService._album_debug(
+                    debug_id,
+                    "SONG_LINKS missing from update_dict: track order will not be touched",
                 )
             
 
             db.commit()
             db.expire_all()
+            AlbumService._album_debug(
+                debug_id,
+                f"COMMIT ok after_commit_order={AlbumService._album_song_order(db, album_id)}",
+            )
 
         except IntegrityError as e:
             db.rollback()
+            AlbumService._album_debug(
+                debug_id,
+                f"ROLLBACK integrity_error={str(e.orig)}",
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Album update failed due to integrity error: {str(e.orig)}",
             )
         except HTTPException:
             db.rollback()
+            AlbumService._album_debug(debug_id, "ROLLBACK http_exception")
             raise
         except Exception as e:
             db.rollback()
+            AlbumService._album_debug(
+                debug_id,
+                f"ROLLBACK unexpected_error={type(e).__name__}: {str(e)}",
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Album update failed: {str(e)}",
             )
 
-        return AlbumService.get_album_or_404(album_id, db)
+        updated_album = AlbumService.get_album_or_404(album_id, db)
+        AlbumService._album_debug(
+            debug_id,
+            "RETURN response_order="
+            f"{[(link.song_id, link.track_number) for link in updated_album.album_song_links]}",
+        )
+        return updated_album
 
     # ------------------------------------------------------------------ #
     #  Eliminazione                                                       #

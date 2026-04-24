@@ -75,13 +75,15 @@ class AlbumRemoteRepository {
       request.headers.addAll(_authHeaders(token));
 
       if (kIsWeb) {
-        if (cover.bytes == null)
+        if (cover.bytes == null) {
           return Left(AppFailure('Image bytes are null on Web'));
+        }
         request.files.add(http.MultipartFile.fromBytes('cover', cover.bytes!,
             filename: cover.name));
       } else {
-        if (cover.filePath == null)
+        if (cover.filePath == null) {
           return Left(AppFailure('Image path is null on mobile'));
+        }
         request.files
             .add(await http.MultipartFile.fromPath('cover', cover.filePath!));
       }
@@ -95,8 +97,9 @@ class AlbumRemoteRepository {
       }
 
       final coverUrl = body?['cover_url']?.toString();
-      if (coverUrl == null || coverUrl.isEmpty)
+      if (coverUrl == null || coverUrl.isEmpty) {
         return Left(AppFailure('Cover URL missing in response'));
+      }
 
       return Right(coverUrl);
     } catch (e) {
@@ -220,11 +223,14 @@ class AlbumRemoteRepository {
 
       // FIX: backend restituisce {"items": [...], "total": ...} non lista piatta.
       final bodyMap = _tryParseObject(res.body);
-      if (bodyMap == null) return Left(AppFailure('Invalid response format'));
+      if (bodyMap == null) {
+        return Left(AppFailure('Invalid response format'));
+      }
 
       final rawItems = bodyMap['items'];
-      if (rawItems is! List)
+      if (rawItems is! List) {
         return Left(AppFailure('Missing items in response'));
+      }
 
       final albums = rawItems
           .whereType<Map>()
@@ -253,14 +259,27 @@ class AlbumRemoteRepository {
   }) async {
     try {
       final body = <String, dynamic>{};
-      if (title != null) body['title'] = title.trim();
-      if (releaseDate != null)
+      if (title != null) {
+        body['title'] = title.trim();
+      }
+      if (releaseDate != null) {
         body['release_date'] = releaseDate.toIso8601String().split('T').first;
-      if (label != null) body['label'] = label.trim();
-      if (albumType != null) body['album_type'] = albumType.trim();
-      if (genre != null) body['genre'] = genre.trim();
-      if (coverUrl != null) body['cover_url'] = coverUrl.trim();
-      if (artistIds != null) body['artist_ids'] = artistIds;
+      }
+      if (label != null) {
+        body['label'] = label.trim();
+      }
+      if (albumType != null) {
+        body['album_type'] = albumType.trim();
+      }
+      if (genre != null) {
+        body['genre'] = genre.trim();
+      }
+      if (coverUrl != null) {
+        body['cover_url'] = coverUrl.trim();
+      }
+      if (artistIds != null) {
+        body['artist_ids'] = artistIds;
+      }
       if (songIds != null) {
         body['song_links'] = songIds
             .asMap()
@@ -272,8 +291,16 @@ class AlbumRemoteRepository {
             .toList();
       }
 
-      if (body.isEmpty)
+      if (kDebugMode && body['song_links'] != null) {
+        debugPrint(
+          '[AlbumRemoteRepository] PATCH /albums/$albumId song_links='
+          '${jsonEncode(body['song_links'])}',
+        );
+      }
+
+      if (body.isEmpty) {
         return Left(AppFailure('No fields provided for album update'));
+      }
 
       // FIX: /albums/{id}
       final res = await client.patch(
@@ -287,7 +314,9 @@ class AlbumRemoteRepository {
         return Left(AppFailure(_extractError(bodyMap,
             fallback: 'Update album failed (${res.statusCode})')));
       }
-      if (bodyMap == null) return Left(AppFailure('Invalid response format'));
+      if (bodyMap == null) {
+        return Left(AppFailure('Invalid response format'));
+      }
 
       return Right(AlbumModel.fromMap(bodyMap));
     } catch (e) {

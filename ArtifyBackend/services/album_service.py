@@ -1,9 +1,10 @@
 import mimetypes
+import uuid
 from typing import Optional
 
 import cloudinary.uploader
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func
+from sqlalchemy import delete, func, insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -112,39 +113,33 @@ class AlbumService:
         song_map: dict[str, Song],
         db: Session,
     ) -> None:
-        existing_links = {
-            link.song_id: link
-            for link in db.query(AlbumSong)
-            .filter(AlbumSong.album_id == album.id)
-            .all()
-        }
-        desired_song_ids = {str(link["song_id"]) for link in song_links}
-
-        for song_id, link in existing_links.items():
-            if song_id not in desired_song_ids:
-                db.delete(link)
-
+        # Rebuild through Core SQL so the DB row order is the source of truth
+        # and ORM relationship/cache state cannot keep stale track numbers alive.
+        rows: list[dict[str, int | str]] = []
         for link in song_links:
             song_id = str(link["song_id"])
-            track_number = int(link["track_number"])
-            existing = existing_links.get(song_id)
+            if song_id not in song_map:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"One or more song IDs are invalid: {song_id}",
+                )
+            rows.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "album_id": album.id,
+                    "song_id": song_id,
+                    "track_number": int(link["track_number"]),
+                }
+            )
 
-            if existing is None:
-                db.add(
-                    AlbumSong(
-                        album=album,
-                        song=song_map[song_id],
-                        track_number=track_number,
-                    )
-                )
-            else:
-                db.query(AlbumSong).filter(
-                    AlbumSong.album_id == album.id,
-                    AlbumSong.song_id == song_id,
-                ).update(
-                    {"track_number": track_number},
-                    synchronize_session=False,
-                )
+        db.execute(delete(AlbumSong).where(AlbumSong.album_id == album.id))
+        db.flush()
+
+        if rows:
+            db.execute(insert(AlbumSong), rows)
+            db.flush()
+
+        db.expire(album, ["album_song_links"])
 
     @staticmethod
     def _ensure_manageable_artist_ids(
@@ -345,6 +340,7 @@ class AlbumService:
             ]
 
             db.commit()
+            db.expire_all()
 
         except IntegrityError as e:
             db.rollback()
@@ -410,16 +406,34 @@ class AlbumService:
                 )
                 song_ids = [str(link["song_id"]) for link in song_links]
                 song_map = AlbumService._resolve_songs(db, song_ids)
-            
+                print(
+                    f"[AlbumService] update album {album_id} received order: "
+                    f"{[(link['song_id'], link['track_number']) for link in song_links]}",
+                    flush=True,
+                )
+
                 AlbumService._sync_album_song_links(
                     album=album,
                     song_links=song_links,
                     song_map=song_map,
                     db=db,
                 )
+                db.flush()
+                persisted_order = (
+                    db.query(AlbumSong.song_id, AlbumSong.track_number)
+                    .filter(AlbumSong.album_id == album.id)
+                    .order_by(AlbumSong.track_number.asc())
+                    .all()
+                )
+                print(
+                    f"[AlbumService] update album {album_id} persisted order: "
+                    f"{[(row.song_id, row.track_number) for row in persisted_order]}",
+                    flush=True,
+                )
             
 
             db.commit()
+            db.expire_all()
 
         except IntegrityError as e:
             db.rollback()
